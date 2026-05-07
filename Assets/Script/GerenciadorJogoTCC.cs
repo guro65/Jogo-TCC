@@ -559,13 +559,13 @@ public class GerenciadorJogoTCC : MonoBehaviour
                 EscolherEmocaoNPCDaPergunta(fase, categoria),
                 EscolherEmocaoJogadorAoOuvir(fase, categoria),
                 CriarFalaNPC(fase, categoria, npc, tema, i),
-                CriarTextoBotaoBom(categoria),
+                CriarTextoBotaoBom(fase, categoria),
                 CriarRespostaBoa(fase, categoria, tema),
                 CriarReacaoBoa(fase, categoria),
-                CriarTextoBotaoMedio(categoria),
+                CriarTextoBotaoMedio(fase, categoria),
                 CriarRespostaMedia(fase, categoria, tema),
                 CriarReacaoMedia(fase, categoria),
-                CriarTextoBotaoRuim(categoria),
+                CriarTextoBotaoRuim(fase, categoria),
                 CriarRespostaRuim(fase, categoria, tema),
                 CriarReacaoRuim(fase, categoria)
             ));
@@ -627,25 +627,28 @@ public class GerenciadorJogoTCC : MonoBehaviour
     string CriarFalaNPC(FaseProfissional fase, CategoriaSoftSkill categoria, DadosPersonagem npc, string tema, int indice)
     {
         string cargo = string.IsNullOrWhiteSpace(npc.cargoOuFuncao) ? "profissional de TI" : npc.cargoOuFuncao;
+        string assinatura = npc.nomePersonagem + " (" + cargo + "): ";
+        string contexto = DescreverContextoProfissional(fase, tema);
+        string tom = ObterTomPorPersonalidade(npc);
 
         if (fase == FaseProfissional.FacilJunior)
         {
             switch (categoria)
             {
                 case CategoriaSoftSkill.Comunicacao:
-                    return npc.nomePersonagem + " (" + cargo + "): Você está lidando com " + tema + ". Como júnior, o mais importante é comunicar dúvida antes que ela vire retrabalho.";
+                    return assinatura + tom + contexto + " Antes de começar, quero entender como você vai tirar dúvidas sem deixar isso virar retrabalho.";
 
                 case CategoriaSoftSkill.TrabalhoEquipe:
-                    return npc.nomePersonagem + " (" + cargo + "): Essa situação de " + tema + " afeta outras pessoas do time. Como você pretende colaborar sem depender totalmente dos outros?";
+                    return assinatura + tom + contexto + " Isso não afeta só a sua entrega. Como você pretende colaborar com o time sem ficar dependente de alguém resolver por você?";
 
                 case CategoriaSoftSkill.ResolucaoProblemas:
-                    return npc.nomePersonagem + " (" + cargo + "): Encontramos um problema ligado a " + tema + ". Antes de pedir solução pronta, quero ver como você investiga.";
+                    return assinatura + tom + contexto + " Antes de pedir uma resposta pronta, me mostre como você investigaria o problema.";
 
                 case CategoriaSoftSkill.Adaptabilidade:
-                    return npc.nomePersonagem + " (" + cargo + "): A prioridade mudou por causa de " + tema + ". Quero ver como você se adapta sem travar.";
+                    return assinatura + tom + contexto + " A prioridade mudou no meio do caminho. Quero ver como você se reorganiza sem travar.";
 
                 case CategoriaSoftSkill.Empatia:
-                    return npc.nomePersonagem + " (" + cargo + "): Alguém do time está pressionado por causa de " + tema + ". Sua resposta pode melhorar ou piorar o clima.";
+                    return assinatura + tom + contexto + " Uma pessoa do time já está no limite. A forma como você responder agora pode acalmar a situação ou piorar o clima.";
             }
         }
 
@@ -654,164 +657,417 @@ public class GerenciadorJogoTCC : MonoBehaviour
             switch (categoria)
             {
                 case CategoriaSoftSkill.Comunicacao:
-                    return npc.nomePersonagem + " (" + cargo + "): Como pleno, você precisa alinhar " + tema + " com devs, QA e produto sem deixar ruído virar atraso.";
+                    return assinatura + tom + contexto + " Devs, QA e produto estão interpretando a situação de formas diferentes. Como você alinha todo mundo antes que isso vire atraso?";
 
                 case CategoriaSoftSkill.TrabalhoEquipe:
-                    return npc.nomePersonagem + " (" + cargo + "): O time está dividido por causa de " + tema + ". Esperamos que você ajude a destravar a colaboração.";
+                    return assinatura + tom + contexto + " O time começou a se dividir, e ninguém quer ceder. Como você ajuda a destravar a colaboração?";
 
                 case CategoriaSoftSkill.ResolucaoProblemas:
-                    return npc.nomePersonagem + " (" + cargo + "): Existe um problema técnico envolvendo " + tema + ". A solução precisa ser prática, mas não pode virar gambiarra.";
+                    return assinatura + tom + contexto + " A solução rápida parece tentadora, mas pode gerar dívida técnica. Qual caminho você propõe?";
 
                 case CategoriaSoftSkill.Adaptabilidade:
-                    return npc.nomePersonagem + " (" + cargo + "): O planejamento mudou por causa de " + tema + ". Um pleno precisa se reorganizar sem perder qualidade.";
+                    return assinatura + tom + contexto + " O planejamento mudou e ainda precisamos entregar com qualidade. Como você reorganiza suas prioridades?";
 
                 case CategoriaSoftSkill.Empatia:
-                    return npc.nomePersonagem + " (" + cargo + "): Uma pessoa do time está sobrecarregada por causa de " + tema + " e começou a cometer erros.";
+                    return assinatura + tom + contexto + " Uma pessoa do time está sobrecarregada e os erros começaram a aparecer. Como você lida com isso sem expor ninguém?";
             }
         }
 
         switch (categoria)
         {
             case CategoriaSoftSkill.Comunicacao:
-                return npc.nomePersonagem + " (" + cargo + "): Em uma situação sênior envolvendo " + tema + ", você precisa comunicar riscos para equipe, liderança e cliente.";
+                return assinatura + tom + contexto + " A liderança e o cliente já perceberam o impacto. Como você comunica riscos sem criar pânico e sem esconder o problema?";
 
             case CategoriaSoftSkill.TrabalhoEquipe:
-                return npc.nomePersonagem + " (" + cargo + "): A equipe está sob pressão por causa de " + tema + ". As pessoas estão se atacando em vez de resolver.";
+                return assinatura + tom + contexto + " A pressão subiu e as pessoas começaram a se atacar. Como você puxa o time de volta para a solução?";
 
             case CategoriaSoftSkill.ResolucaoProblemas:
-                return npc.nomePersonagem + " (" + cargo + "): Precisamos decidir uma solução técnica para " + tema + " sem comprometer estabilidade e manutenção.";
+                return assinatura + tom + contexto + " A correção mais rápida resolve agora, mas pode comprometer estabilidade depois. Como você decide?";
 
             case CategoriaSoftSkill.Adaptabilidade:
-                return npc.nomePersonagem + " (" + cargo + "): A direção do projeto mudou por causa de " + tema + ". O time espera uma decisão rápida e madura.";
+                return assinatura + tom + contexto + " A direção do projeto mudou e o time espera uma decisão firme. Como você conduz essa virada?";
 
             case CategoriaSoftSkill.Empatia:
-                return npc.nomePersonagem + " (" + cargo + "): Depois de " + tema + ", parte da equipe está insegura e com medo de assumir erros.";
+                return assinatura + tom + contexto + " Depois do ocorrido, parte da equipe está com medo de assumir responsabilidades. Como você reconstrói confiança sem ignorar o erro?";
         }
 
-        return npc.nomePersonagem + ": Temos uma situação importante para resolver.";
+        return assinatura + "Temos uma situação importante para resolver. Quero ouvir sua decisão.";
     }
 
-    string CriarTextoBotaoBom(CategoriaSoftSkill categoria)
+    string DescreverContextoProfissional(FaseProfissional fase, string tema)
+    {
+        switch (tema)
+        {
+            case "uma task no Jira com descrição incompleta":
+                return "A task chegou com informações pela metade e o prazo continua correndo.";
+
+            case "um pull request com comentários de revisão":
+                return "O pull request voltou com comentários importantes de revisão.";
+
+            case "um bug simples encontrado pelo QA":
+                return "O QA encontrou um bug simples, mas ele bloqueia a validação da entrega.";
+
+            case "uma mudança pequena de requisito no meio da sprint":
+                return "Produto pediu uma mudança pequena, mas ela apareceu no meio da sprint.";
+
+            case "uma sprint atrasada por falta de alinhamento":
+                return "A sprint atrasou porque cada área seguiu com uma interpretação diferente.";
+
+            case "um conflito entre desenvolvedor e QA":
+                return "Dev e QA estão discordando do problema e a discussão já começou a atrapalhar a entrega.";
+
+            case "uma prioridade técnica competindo com demanda urgente do produto":
+                return "Existe uma melhoria técnica importante competindo com uma demanda urgente de produto.";
+
+            case "uma refatoração necessária em código legado":
+                return "O código legado precisa de refatoração, mas qualquer mudança ali exige cuidado.";
+
+            case "um incidente crítico em produção":
+                return "Um incidente crítico acabou de atingir produção.";
+
+            case "uma war room com cliente impactado":
+                return "A war room foi aberta e o cliente já está diretamente impactado.";
+
+            case "uma decisão de arquitetura com risco técnico":
+                return "A decisão de arquitetura vai afetar o projeto por meses.";
+
+            case "um conflito entre pessoas experientes da equipe":
+                return "Duas pessoas experientes do time discordam e a tensão está contaminando a reunião.";
+        }
+
+        return "Temos uma situação envolvendo " + tema + ".";
+    }
+
+    string ObterTomPorPersonalidade(DadosPersonagem npc)
+    {
+        if (npc == null)
+            return "";
+
+        switch (npc.personalidade)
+        {
+            case PersonalidadePersonagem.Gentil:
+                return "Vamos com calma. ";
+
+            case PersonalidadePersonagem.Calmo:
+                return "Respira e analisa comigo. ";
+
+            case PersonalidadePersonagem.Extrovertido:
+                return "Beleza, vamos resolver isso do jeito certo. ";
+
+            case PersonalidadePersonagem.Timido:
+                return "Eu sei que a situação é desconfortável, mas precisamos falar sobre ela. ";
+
+            case PersonalidadePersonagem.Irritado:
+                return "Já perdemos tempo demais com isso. ";
+
+            case PersonalidadePersonagem.Serio:
+                return "Vou ser direto. ";
+
+            case PersonalidadePersonagem.Competitivo:
+                return "Esse é o tipo de situação que separa quem só executa de quem realmente cresce. ";
+
+            case PersonalidadePersonagem.Engracado:
+                return "Parece que o sistema resolveu testar nossa paciência hoje. ";
+
+            case PersonalidadePersonagem.Inseguro:
+                return "Não quero que isso saia do controle. ";
+        }
+
+        return "";
+    }
+
+    string CriarTextoBotaoBom(FaseProfissional fase, CategoriaSoftSkill categoria)
     {
         switch (categoria)
         {
             case CategoriaSoftSkill.Comunicacao:
-                return "Comunicar com clareza";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou centralizar as informações.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou alinhar com os envolvidos.";
+                return "Vou perguntar antes de seguir.";
+
             case CategoriaSoftSkill.TrabalhoEquipe:
-                return "Colaborar com o time";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou trazer o time de volta ao foco.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou juntar quem precisa decidir.";
+                return "Vou ajudar sem empurrar o problema.";
+
             case CategoriaSoftSkill.ResolucaoProblemas:
-                return "Investigar com método";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou medir o risco antes de agir.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou investigar antes de corrigir.";
+                return "Vou testar e pedir ajuda com dados.";
+
             case CategoriaSoftSkill.Adaptabilidade:
-                return "Adaptar o plano";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou reorganizar o plano do time.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou ajustar as prioridades.";
+                return "Vou confirmar o que mudou.";
+
             case CategoriaSoftSkill.Empatia:
-                return "Responder com empatia";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou cuidar do time sem esconder fatos.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou conversar antes que piore.";
+                return "Vou ouvir antes de responder.";
+
             default:
-                return "Boa resposta";
+                return "Vou agir com cuidado.";
         }
     }
 
-    string CriarTextoBotaoMedio(CategoriaSoftSkill categoria)
+    string CriarTextoBotaoMedio(FaseProfissional fase, CategoriaSoftSkill categoria)
     {
         switch (categoria)
         {
             case CategoriaSoftSkill.Comunicacao:
-                return "Responder parcialmente";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Resolvo primeiro, aviso depois.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Falo só com quem estiver perto.";
+                return "Vou seguir com o que entendi.";
+
             case CategoriaSoftSkill.TrabalhoEquipe:
-                return "Ajudar só o necessário";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Cada um cuida da sua parte.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Ajudo só no que for comigo.";
+                return "Faço minha parte primeiro.";
+
             case CategoriaSoftSkill.ResolucaoProblemas:
-                return "Resolver no improviso";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Aplico um contorno rápido.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Corrijo o urgente agora.";
+                return "Tento uma solução simples.";
+
             case CategoriaSoftSkill.Adaptabilidade:
-                return "Aceitar com resistência";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Mudo só quando for definitivo.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Ajusto o que der agora.";
+                return "Vou mudar, mas com calma.";
+
             case CategoriaSoftSkill.Empatia:
-                return "Manter distância";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Evito expor, mas sigo cobrando.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Dou espaço, sem assumir tudo.";
+                return "Melhor não me envolver muito.";
+
             default:
-                return "Resposta mediana";
+                return "Resolvo o urgente primeiro.";
         }
     }
 
-    string CriarTextoBotaoRuim(CategoriaSoftSkill categoria)
+    string CriarTextoBotaoRuim(FaseProfissional fase, CategoriaSoftSkill categoria)
     {
         switch (categoria)
         {
             case CategoriaSoftSkill.Comunicacao:
-                return "Esconder informação";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Melhor não alarmar ninguém.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Quem precisar, que pergunte.";
+                return "Vou fazer do jeito que entendi.";
+
             case CategoriaSoftSkill.TrabalhoEquipe:
-                return "Culpar o time";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Minha decisão vai prevalecer.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Primeiro precisamos achar o culpado.";
+                return "Se atrasarem, não é comigo.";
+
             case CategoriaSoftSkill.ResolucaoProblemas:
-                return "Chutar solução";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Mudo direto em produção.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou mexer e torcer pra funcionar.";
+                return "Vou chutar uma solução.";
+
             case CategoriaSoftSkill.Adaptabilidade:
-                return "Reclamar da mudança";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou manter o plano antigo.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Cansei dessas mudanças.";
+                return "Avisaram tarde demais.";
+
             case CategoriaSoftSkill.Empatia:
-                return "Responder sem consideração";
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Agora não é hora de acolher.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "A pessoa devia ter avisado.";
+                return "Cada um lida com sua pressão.";
+
             default:
-                return "Resposta ruim";
+                return "Vou fazer do meu jeito.";
         }
     }
 
     string CriarRespostaBoa(FaseProfissional fase, CategoriaSoftSkill categoria, string tema)
     {
-        if (fase == FaseProfissional.DificilSenior)
-            return "Vou organizar a comunicação, assumir a responsabilidade técnica e conduzir o time para uma solução segura sobre " + tema + ".";
+        switch (categoria)
+        {
+            case CategoriaSoftSkill.Comunicacao:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou centralizar as informações, comunicar o risco com transparência e manter liderança, cliente e equipe atualizados com o mesmo contexto.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou chamar as pessoas envolvidas, confirmar o entendimento de cada área e registrar um alinhamento claro para evitar ruído.";
+                return "Vou perguntar o que não ficou claro, confirmar o entendimento e avisar cedo caso algo possa atrasar.";
 
-        if (fase == FaseProfissional.MedioPleno)
-            return "Vou alinhar com o time, entender o impacto de " + tema + " e propor um caminho claro sem expor ninguém.";
+            case CategoriaSoftSkill.TrabalhoEquipe:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou interromper a troca de acusações, separar fatos de opiniões e conduzir o time para uma decisão conjunta.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou aproximar as áreas envolvidas, dividir responsabilidades e garantir que ninguém fique bloqueado sozinho.";
+                return "Vou ajudar no que estiver ao meu alcance e pedir orientação quando precisar, sem jogar o problema para outra pessoa.";
 
-        return "Vou perguntar com clareza, entender melhor " + tema + " e agir sem esconder minhas dúvidas.";
+            case CategoriaSoftSkill.ResolucaoProblemas:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou avaliar impacto, risco e prazo antes de escolher uma solução. Se precisar de contorno, ele será documentado e acompanhado.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou investigar a causa, comparar alternativas e propor uma solução que resolva sem criar uma dívida técnica desnecessária.";
+                return "Vou reproduzir o problema, revisar as informações disponíveis e pedir ajuda com dados concretos caso eu trave.";
+
+            case CategoriaSoftSkill.Adaptabilidade:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou reorganizar o plano, explicar as mudanças para o time e proteger o que for mais crítico para a entrega.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou revisar prioridades, negociar o que precisa sair primeiro e ajustar minha entrega sem perder qualidade.";
+                return "Vou entender a nova prioridade, ajustar minha tarefa e confirmar o que precisa ser entregue primeiro.";
+
+            case CategoriaSoftSkill.Empatia:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou reconhecer o impacto na equipe, criar um espaço seguro para levantar os fatos e focar em aprendizado, não em caça aos culpados.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou conversar com a pessoa em particular, entender a sobrecarga e ajudar a reorganizar as tarefas antes que piore.";
+                return "Vou ouvir a pessoa, oferecer ajuda e evitar qualquer comentário que aumente a pressão.";
+        }
+
+        return "Vou agir com clareza, responsabilidade e respeito pelo time.";
     }
 
     string CriarRespostaMedia(FaseProfissional fase, CategoriaSoftSkill categoria, string tema)
     {
-        if (fase == FaseProfissional.DificilSenior)
-            return "Vou resolver tecnicamente primeiro e depois comunico o que for necessário sobre " + tema + ".";
+        switch (categoria)
+        {
+            case CategoriaSoftSkill.Comunicacao:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou resolver primeiro com quem está mais perto do problema e depois repasso o resumo para o restante.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou falar com quem eu achar mais importante agora e depois vejo se precisa envolver mais alguém.";
+                return "Vou tentar seguir com o que entendi. Se aparecer erro, eu pergunto.";
 
-        if (fase == FaseProfissional.MedioPleno)
-            return "Vou tentar resolver a parte urgente de " + tema + " e depois vejo como alinhar o restante com o time.";
+            case CategoriaSoftSkill.TrabalhoEquipe:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou deixar cada pessoa cuidar da própria parte e intervenho se o conflito atrapalhar demais.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou ajudar na parte que depende de mim, mas não quero me envolver muito na discussão dos outros.";
+                return "Vou fazer minha parte e ajudar se alguém pedir diretamente.";
 
-        return "Vou tentar resolver " + tema + " sozinho primeiro. Se não der, eu peço ajuda.";
+            case CategoriaSoftSkill.ResolucaoProblemas:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou aplicar o contorno mais rápido agora e depois avaliamos se precisa de uma solução definitiva.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou corrigir o ponto mais urgente primeiro e depois investigo a causa com mais calma.";
+                return "Vou testar uma solução simples primeiro. Se não funcionar, procuro outra saída.";
+
+            case CategoriaSoftSkill.Adaptabilidade:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou aceitar a mudança, mas mantenho o plano atual até ter certeza de que a nova direção é definitiva.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou ajustar o que for urgente, mesmo que algumas coisas fiquem para resolver depois.";
+                return "Vou mudar o que me pedirem, mas preciso de um tempo para entender tudo.";
+
+            case CategoriaSoftSkill.Empatia:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou evitar expor as pessoas, mas agora o foco principal precisa ser entregar uma resposta rápida.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Vou dar espaço para a pessoa, mas sem assumir responsabilidades que não são minhas.";
+                return "Vou evitar piorar a situação e seguir com meu trabalho.";
+        }
+
+        return "Vou resolver o mais urgente agora e depois ajusto o restante.";
     }
 
     string CriarRespostaRuim(FaseProfissional fase, CategoriaSoftSkill categoria, string tema)
     {
-        if (fase == FaseProfissional.DificilSenior)
-            return "Para evitar desgaste, é melhor corrigir " + tema + " em silêncio e não chamar atenção para o problema.";
+        switch (categoria)
+        {
+            case CategoriaSoftSkill.Comunicacao:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Não vou alarmar ninguém. É melhor resolver em silêncio e só comentar se alguém perguntar.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Quem precisar saber que venha atrás. Eu não vou gastar tempo explicando tudo de novo.";
+                return "Se a descrição está ruim, o problema não é meu. Vou fazer do jeito que eu entendi.";
 
-        if (fase == FaseProfissional.MedioPleno)
-            return "Isso aconteceu porque alguém não fez a própria parte direito. Primeiro precisamos apontar quem errou em " + tema + ".";
+            case CategoriaSoftSkill.TrabalhoEquipe:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Se o time está brigando, cada um que defenda sua parte. Eu só vou garantir que a minha decisão prevaleça.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Isso atrasou porque alguém não fez a própria parte. Primeiro precisamos apontar quem errou.";
+                return "Vou cuidar só da minha entrega. Se outra pessoa atrasar, não é comigo.";
 
-        return "Acho que " + tema + " não é responsabilidade minha. Vou seguir do jeito que der.";
+            case CategoriaSoftSkill.ResolucaoProblemas:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Vou aplicar a correção mais rápida direto em produção. Depois a gente vê se deu algum efeito colateral.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Não precisa investigar tanto. Vou mudar o que parece errado e torcer para funcionar.";
+                return "Vou chutar uma solução. Se quebrar, alguém mais experiente arruma depois.";
+
+            case CategoriaSoftSkill.Adaptabilidade:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Essa mudança chegou tarde demais. Vou manter o plano antigo e quem discordar que justifique.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Toda hora mudam prioridade. Vou continuar no que eu já estava fazendo.";
+                return "Não vou mudar agora. Se queriam diferente, deveriam ter avisado antes.";
+
+            case CategoriaSoftSkill.Empatia:
+                if (fase == FaseProfissional.DificilSenior)
+                    return "Medo de errar todo mundo tem. Agora não é hora de acolher ninguém, é hora de cobrar resultado.";
+                if (fase == FaseProfissional.MedioPleno)
+                    return "Se a pessoa está sobrecarregada, deveria ter falado antes. Não vou assumir problema dos outros.";
+                return "Cada um lida com sua pressão. Eu tenho meus próprios problemas.";
+        }
+
+        return "Vou fazer do meu jeito e evitar me envolver.";
     }
 
     string CriarReacaoBoa(FaseProfissional fase, CategoriaSoftSkill categoria)
     {
         if (fase == FaseProfissional.DificilSenior)
-            return "Essa é uma postura sênior: técnica, ética, comunicação e liderança ao mesmo tempo.";
+            return "Boa decisão. Você tratou o problema com maturidade, protegeu a equipe e manteve a responsabilidade técnica visível.";
 
         if (fase == FaseProfissional.MedioPleno)
-            return "Boa postura de pleno. Você pensou em entrega, pessoas e clareza.";
+            return "Boa postura. Você pensou na entrega sem esquecer comunicação, colaboração e impacto no time.";
 
-        return "Boa postura de júnior. Você demonstrou vontade de aprender e evitar retrabalho.";
+        return "Boa resposta. Você mostrou vontade de aprender, pediu clareza e evitou transformar dúvida em retrabalho.";
     }
 
     string CriarReacaoMedia(FaseProfissional fase, CategoriaSoftSkill categoria)
     {
         if (fase == FaseProfissional.DificilSenior)
-            return "Pode funcionar no curto prazo, mas um sênior precisa pensar também em confiança, processo e impacto.";
+            return "Pode funcionar no curto prazo, mas ainda falta visão de liderança. Um sênior precisa cuidar também de confiança, processo e impacto.";
 
         if (fase == FaseProfissional.MedioPleno)
-            return "Resolve parte do problema, mas ainda falta visão de equipe e prevenção.";
+            return "Você resolveu parte do problema, mas ainda deixou pontas soltas. Como pleno, é importante prevenir novos desalinhamentos.";
 
-        return "Você tentou resolver, mas ainda precisa melhorar comunicação e organização.";
+        return "Você tentou seguir em frente, mas poderia ter comunicado melhor e pedido apoio com mais clareza.";
     }
 
     string CriarReacaoRuim(FaseProfissional fase, CategoriaSoftSkill categoria)
     {
         if (fase == FaseProfissional.DificilSenior)
-            return "Essa postura coloca a confiança em risco. Em nível sênior, esconder ou culpar pode causar danos maiores que o erro técnico.";
+            return "Essa decisão aumenta o risco da crise. Em nível sênior, esconder informações, impor decisões ou culpar pessoas pode causar mais dano que o erro inicial.";
 
         if (fase == FaseProfissional.MedioPleno)
-            return "Essa resposta aumenta atrito e reduz colaboração. Como pleno, você precisa ajudar a unir o time.";
+            return "Essa postura enfraquece a confiança do time. Um pleno precisa reduzir atrito, não transformar pressão em conflito.";
 
-        return "Essa resposta pode gerar retrabalho, afastar o time e dificultar seu crescimento profissional.";
+        return "Essa escolha pode gerar retrabalho e passar a impressão de falta de responsabilidade. Como júnior, pedir clareza é melhor do que agir no escuro.";
     }
 
     OpcaoEscolha CriarOpcaoBoa(CategoriaSoftSkill categoria, string textoBotao, string falaJogador, string reacaoNPC, int proximoNo)
