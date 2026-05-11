@@ -80,6 +80,20 @@ public class GerenciadorJogoTCC : MonoBehaviour
     public TMP_Text textoFinal;
     public Button botaoReiniciar;
 
+    [Header("Game Over / Demissão")]
+    public GameObject painelGameOver;
+    public TMP_Text textoGameOver;
+    public Button botaoVoltarCriacaoPersonagem;
+
+    [Tooltip("Botão para reiniciar a fase atual após demissão. O nome antigo foi mantido para não perder a referência no Inspector.")]
+    public Button botaoReiniciarFase1GameOver;
+
+    public int quantidadeRespostasRuinsSeguidasParaGameOver = 3;
+
+    [Header("Clima da equipe / Risco de demissão")]
+    public TMP_Text textoClimaEquipe;
+    public int sequenciaRuimParaMostrarAlerta = 2;
+
     [Header("Visual da cena")]
     public ControladorCenaVN controladorCena;
 
@@ -107,6 +121,7 @@ public class GerenciadorJogoTCC : MonoBehaviour
     private Emocao ultimaEmocaoPersonagem = Emocao.Neutro;
 
     private FaseProfissional faseAtual = FaseProfissional.FacilJunior;
+    private FaseProfissional faseDoGameOver = FaseProfissional.FacilJunior;
     private FaseProfissional proximaFaseDepoisResultado;
 
     private int comunicacao;
@@ -129,6 +144,12 @@ public class GerenciadorJogoTCC : MonoBehaviour
     private int totalEscolhasMedias;
     private int totalEscolhasRuins;
     private int sequenciaEscolhasRuins;
+    private int ruinsComunicacao;
+    private int ruinsTrabalhoEquipe;
+    private int ruinsResolucaoProblemas;
+    private int ruinsAdaptabilidade;
+    private int ruinsEmpatia;
+    private CategoriaSoftSkill ultimaCategoriaRuim;
     private bool exibindoReacaoEscolha;
     private bool aguardandoResultadoFase;
     private int proximoNoAposReacao;
@@ -180,6 +201,8 @@ public class GerenciadorJogoTCC : MonoBehaviour
         if (botaoContinuar != null) botaoContinuar.onClick.AddListener(ContinuarDialogo);
         if (botaoContinuarFase != null) botaoContinuarFase.onClick.AddListener(ContinuarDepoisResultadoFase);
         if (botaoReiniciar != null) botaoReiniciar.onClick.AddListener(ReiniciarJogo);
+        if (botaoVoltarCriacaoPersonagem != null) botaoVoltarCriacaoPersonagem.onClick.AddListener(VoltarParaCriacaoPersonagem);
+        if (botaoReiniciarFase1GameOver != null) botaoReiniciarFase1GameOver.onClick.AddListener(ReiniciarFaseAtualAposGameOver);
 
         TocarMusica(musicaInicio);
     }
@@ -193,6 +216,8 @@ public class GerenciadorJogoTCC : MonoBehaviour
         if (painelEscolhas != null) painelEscolhas.SetActive(false);
         if (painelResultadoFase != null) painelResultadoFase.SetActive(false);
         if (painelFinal != null) painelFinal.SetActive(false);
+        if (painelGameOver != null) painelGameOver.SetActive(false);
+        if (textoClimaEquipe != null) textoClimaEquipe.gameObject.SetActive(false);
         if (fundo != null) fundo.SetActive(false);
         PrepararImagemTransicao(false, 0f);
 
@@ -200,6 +225,7 @@ public class GerenciadorJogoTCC : MonoBehaviour
             controladorCena.EsconderTodos();
 
         nomeJaConfirmado = false;
+        ResetarPontuacaoGeral();
 
         if (grupoNome != null) grupoNome.SetActive(true);
         if (grupoGenero != null) grupoGenero.SetActive(false);
@@ -365,6 +391,12 @@ public class GerenciadorJogoTCC : MonoBehaviour
         totalEscolhasMedias = 0;
         totalEscolhasRuins = 0;
         sequenciaEscolhasRuins = 0;
+        ruinsComunicacao = 0;
+        ruinsTrabalhoEquipe = 0;
+        ruinsResolucaoProblemas = 0;
+        ruinsAdaptabilidade = 0;
+        ruinsEmpatia = 0;
+        ultimaCategoriaRuim = CategoriaSoftSkill.Comunicacao;
         exibindoReacaoEscolha = false;
         aguardandoResultadoFase = false;
         proximoNoAposReacao = -1;
@@ -380,9 +412,12 @@ public class GerenciadorJogoTCC : MonoBehaviour
         if (painelEscolhas != null) painelEscolhas.SetActive(false);
         if (painelResultadoFase != null) painelResultadoFase.SetActive(false);
         if (painelFinal != null) painelFinal.SetActive(false);
+        if (painelGameOver != null) painelGameOver.SetActive(false);
+        if (textoClimaEquipe != null) textoClimaEquipe.gameObject.SetActive(true);
 
         AtualizarTextoFase();
         AtualizarMedidor();
+        AtualizarClimaEquipe();
         TocarMusicaDaFase();
 
         MontarRoteiroDaFase();
@@ -510,6 +545,53 @@ public class GerenciadorJogoTCC : MonoBehaviour
 
         if (textoMedidorAprovacao != null)
             textoMedidorAprovacao.text = "Aprovação: " + Mathf.RoundToInt(valor * 100f) + "% / Necessário: " + PorcentagemNecessaria(faseAtual).ToString("F0") + "%";
+    }
+
+
+    void AtualizarClimaEquipe()
+    {
+        if (textoClimaEquipe == null)
+            return;
+
+        int total = totalEscolhasBoas + totalEscolhasMedias + totalEscolhasRuins;
+        float percentualRuim = total > 0 ? (float)totalEscolhasRuins / total : 0f;
+        int limiteGameOver = Mathf.Max(2, quantidadeRespostasRuinsSeguidasParaGameOver);
+        int limiteAlerta = Mathf.Clamp(sequenciaRuimParaMostrarAlerta, 1, limiteGameOver - 1);
+
+        string nomeFaseCurta = "Equipe";
+
+        switch (faseAtual)
+        {
+            case FaseProfissional.FacilJunior:
+                nomeFaseCurta = "Equipe júnior";
+                break;
+            case FaseProfissional.MedioPleno:
+                nomeFaseCurta = "Equipe pleno";
+                break;
+            case FaseProfissional.DificilSenior:
+                nomeFaseCurta = "Equipe sênior";
+                break;
+        }
+
+        if (sequenciaEscolhasRuins >= limiteAlerta || percentualRuim >= 0.45f)
+        {
+            textoClimaEquipe.text = nomeFaseCurta + ": clima pesado. Os NPCs estão perdendo confiança nas suas decisões.";
+            return;
+        }
+
+        if (total == 0)
+        {
+            textoClimaEquipe.text = nomeFaseCurta + ": observando sua postura.";
+            return;
+        }
+
+        if (totalEscolhasBoas > totalEscolhasRuins && sequenciaEscolhasRuins == 0)
+        {
+            textoClimaEquipe.text = nomeFaseCurta + ": confiança aumentando. Suas decisões estão ajudando o time.";
+            return;
+        }
+
+        textoClimaEquipe.text = nomeFaseCurta + ": clima instável. Algumas escolhas ajudaram, mas outras deixaram dúvidas.";
     }
 
     void TocarMusica(AudioClip musica)
@@ -1529,7 +1611,6 @@ public class GerenciadorJogoTCC : MonoBehaviour
     void EscolherOpcao(OpcaoEscolha opcao)
     {
         pontosFaseAtual += opcao.pontosAprovacao;
-        AtualizarMedidor();
 
         comunicacao += opcao.deltaComunicacao;
         trabalhoEquipe += opcao.deltaTrabalhoEquipe;
@@ -1556,10 +1637,20 @@ public class GerenciadorJogoTCC : MonoBehaviour
         {
             totalEscolhasRuins++;
             sequenciaEscolhasRuins++;
+            RegistrarRespostaRuim(opcao.categoria);
         }
+
+        AtualizarMedidor();
+        AtualizarClimaEquipe();
 
         ultimaRespostaJogador = opcao.respostaJogador;
         ultimaReacaoNPC = opcao.reacaoNPC;
+
+        if (DeveAtivarGameOver())
+        {
+            MostrarGameOverDemissao();
+            return;
+        }
 
         exibindoReacaoEscolha = true;
 
@@ -1575,6 +1666,200 @@ public class GerenciadorJogoTCC : MonoBehaviour
         }
 
         MostrarNoAtual();
+    }
+
+    void RegistrarRespostaRuim(CategoriaSoftSkill categoria)
+    {
+        ultimaCategoriaRuim = categoria;
+
+        switch (categoria)
+        {
+            case CategoriaSoftSkill.Comunicacao:
+                ruinsComunicacao++;
+                break;
+
+            case CategoriaSoftSkill.TrabalhoEquipe:
+                ruinsTrabalhoEquipe++;
+                break;
+
+            case CategoriaSoftSkill.ResolucaoProblemas:
+                ruinsResolucaoProblemas++;
+                break;
+
+            case CategoriaSoftSkill.Adaptabilidade:
+                ruinsAdaptabilidade++;
+                break;
+
+            case CategoriaSoftSkill.Empatia:
+                ruinsEmpatia++;
+                break;
+        }
+    }
+
+    bool DeveAtivarGameOver()
+    {
+        int limite = Mathf.Max(2, quantidadeRespostasRuinsSeguidasParaGameOver);
+        return sequenciaEscolhasRuins >= limite;
+    }
+
+    void MostrarGameOverDemissao()
+    {
+        faseDoGameOver = faseAtual;
+
+        if (rotinaDigitacao != null)
+            StopCoroutine(rotinaDigitacao);
+
+        textoDigitando = false;
+        exibindoReacaoEscolha = false;
+        aguardandoResultadoFase = false;
+
+        if (painelInicio != null) painelInicio.SetActive(false);
+        if (painelDadosIniciais != null) painelDadosIniciais.SetActive(false);
+        if (painelTopo != null) painelTopo.SetActive(false);
+        if (painelDialogo != null) painelDialogo.SetActive(false);
+        if (painelEscolhas != null) painelEscolhas.SetActive(false);
+        if (painelResultadoFase != null) painelResultadoFase.SetActive(false);
+        if (painelFinal != null) painelFinal.SetActive(false);
+        if (textoClimaEquipe != null) textoClimaEquipe.gameObject.SetActive(false);
+        if (painelGameOver != null) painelGameOver.SetActive(true);
+
+        if (controladorCena != null)
+            controladorCena.EsconderTodos();
+
+        if (textoGameOver != null)
+        {
+            textoGameOver.text =
+                "Demissão\n\n" +
+                nomeJogador + " foi desligado da equipe.\n\n" +
+                GerarMotivoDemissao() + "\n\n" +
+                "Última resposta dada:\n\"" + ultimaRespostaJogador + "\"\n\n" +
+                "O problema não foi apenas uma escolha ruim isolada, mas uma sequência de decisões que afetou a confiança da equipe.";
+        }
+    }
+
+    string GerarMotivoDemissao()
+    {
+        CategoriaSoftSkill motivoPrincipal = ObterCategoriaComMaisFalhas();
+        string contextoFase = ContextoDaFaseParaDemissao();
+
+        switch (motivoPrincipal)
+        {
+            case CategoriaSoftSkill.Comunicacao:
+                return contextoFase + " A demissão aconteceu porque sua comunicação começou a gerar ruídos constantes: informações importantes ficaram mal explicadas, dúvidas foram escondidas e a equipe passou a tomar decisões sem clareza.";
+
+            case CategoriaSoftSkill.TrabalhoEquipe:
+                return contextoFase + " A demissão aconteceu porque suas escolhas quebraram a colaboração do time. Em vez de ajudar a resolver o problema, suas atitudes aumentaram o atrito e fizeram outras pessoas perderem confiança no trabalho em conjunto.";
+
+            case CategoriaSoftSkill.ResolucaoProblemas:
+                return contextoFase + " A demissão aconteceu porque você insistiu em decisões impulsivas diante dos problemas. A equipe precisava de análise, investigação e cuidado técnico, mas suas respostas colocaram a entrega em risco.";
+
+            case CategoriaSoftSkill.Adaptabilidade:
+                return contextoFase + " A demissão aconteceu porque você resistiu às mudanças necessárias. A equipe precisava se reorganizar diante da situação, mas suas decisões travaram o andamento e dificultaram a adaptação do projeto.";
+
+            case CategoriaSoftSkill.Empatia:
+                return contextoFase + " A demissão aconteceu porque suas respostas ignoraram o impacto nas pessoas. O clima da equipe piorou, colegas se sentiram desrespeitados e a liderança entendeu que sua postura estava prejudicando o ambiente profissional.";
+        }
+
+        return contextoFase + " A demissão aconteceu porque suas decisões prejudicaram a confiança da equipe e comprometeram o andamento do projeto.";
+    }
+
+    CategoriaSoftSkill ObterCategoriaComMaisFalhas()
+    {
+        CategoriaSoftSkill categoria = ultimaCategoriaRuim;
+        int maior = -1;
+
+        if (ruinsComunicacao > maior)
+        {
+            maior = ruinsComunicacao;
+            categoria = CategoriaSoftSkill.Comunicacao;
+        }
+
+        if (ruinsTrabalhoEquipe > maior)
+        {
+            maior = ruinsTrabalhoEquipe;
+            categoria = CategoriaSoftSkill.TrabalhoEquipe;
+        }
+
+        if (ruinsResolucaoProblemas > maior)
+        {
+            maior = ruinsResolucaoProblemas;
+            categoria = CategoriaSoftSkill.ResolucaoProblemas;
+        }
+
+        if (ruinsAdaptabilidade > maior)
+        {
+            maior = ruinsAdaptabilidade;
+            categoria = CategoriaSoftSkill.Adaptabilidade;
+        }
+
+        if (ruinsEmpatia > maior)
+        {
+            maior = ruinsEmpatia;
+            categoria = CategoriaSoftSkill.Empatia;
+        }
+
+        return categoria;
+    }
+
+    string ContextoDaFaseParaDemissao()
+    {
+        switch (faseAtual)
+        {
+            case FaseProfissional.FacilJunior:
+                return "Durante a fase Júnior, o time ainda tentava corrigir problemas simples de alinhamento, tarefas incompletas e retrabalho.";
+
+            case FaseProfissional.MedioPleno:
+                return "Durante a fase Pleno, a equipe enfrentava pressão de entrega, conflitos entre áreas e decisões que exigiam mais autonomia.";
+
+            case FaseProfissional.DificilSenior:
+                return "Durante a fase Sênior, a empresa estava lidando com uma crise séria, cliente impactado e necessidade de liderança madura.";
+        }
+
+        return "Durante a simulação, a equipe precisava de uma postura profissional mais consistente.";
+    }
+
+    void ResetarPontuacaoGeral()
+    {
+        comunicacao = 0;
+        trabalhoEquipe = 0;
+        resolucaoProblemas = 0;
+        adaptabilidade = 0;
+        empatia = 0;
+
+        pontosFaseAtual = 0;
+        pontosMaximosFase = TOTAL_PERGUNTAS_POR_FASE * 2;
+        porcentagemFase = 0f;
+
+        totalEscolhasBoas = 0;
+        totalEscolhasMedias = 0;
+        totalEscolhasRuins = 0;
+        sequenciaEscolhasRuins = 0;
+        ruinsComunicacao = 0;
+        ruinsTrabalhoEquipe = 0;
+        ruinsResolucaoProblemas = 0;
+        ruinsAdaptabilidade = 0;
+        ruinsEmpatia = 0;
+        ultimaCategoriaRuim = CategoriaSoftSkill.Comunicacao;
+    }
+
+    void VoltarParaCriacaoPersonagem()
+    {
+        if (campoNome != null)
+            campoNome.text = "";
+
+        if (dropdownGenero != null)
+            dropdownGenero.value = 0;
+
+        ResetarPontuacaoGeral();
+        AtivarEstadoInicial();
+        TocarMusica(musicaInicio);
+    }
+
+    void ReiniciarFaseAtualAposGameOver()
+    {
+        // Reinicia exatamente a fase em que o jogador foi demitido.
+        // Exemplo: se caiu na fase Pleno, volta para a fase Pleno; se caiu na Sênior, volta para a Sênior.
+        IniciarFase(faseDoGameOver);
     }
 
     void MostrarResultadoFase()
