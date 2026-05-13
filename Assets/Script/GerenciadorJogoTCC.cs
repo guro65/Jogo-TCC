@@ -1,9 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
 using TMPro;
+using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public class GerenciadorJogoTCC : MonoBehaviour
 {
@@ -15,6 +16,10 @@ public class GerenciadorJogoTCC : MonoBehaviour
     public GameObject painelEscolhas;
     public GameObject painelResultadoFase;
     public GameObject painelFinal;
+
+    [Header("Animação do topo")]
+    public Animator animatorTextoFase;
+    public string triggerAnimacaoTextoFase = "MostrarFase";
 
     [Header("Áudio")]
     public AudioSource fonteAudio;
@@ -75,6 +80,9 @@ public class GerenciadorJogoTCC : MonoBehaviour
     [Header("Resultado da fase")]
     public TMP_Text textoResultadoFase;
     public Button botaoContinuarFase;
+
+    [Tooltip("Botão para reiniciar a fase atual no painel de resultado.")]
+    public Button botaoReiniciarFaseResultado;
 
     [Header("Final")]
     public TMP_Text textoFinal;
@@ -200,11 +208,53 @@ public class GerenciadorJogoTCC : MonoBehaviour
         if (campoNome != null) campoNome.onValueChanged.AddListener(AtualizarBotaoInicioPorNome);
         if (botaoContinuar != null) botaoContinuar.onClick.AddListener(ContinuarDialogo);
         if (botaoContinuarFase != null) botaoContinuarFase.onClick.AddListener(ContinuarDepoisResultadoFase);
+        if (botaoReiniciarFaseResultado != null) botaoReiniciarFaseResultado.onClick.AddListener(ReiniciarFaseAtualPeloResultado);
         if (botaoReiniciar != null) botaoReiniciar.onClick.AddListener(ReiniciarJogo);
         if (botaoVoltarCriacaoPersonagem != null) botaoVoltarCriacaoPersonagem.onClick.AddListener(VoltarParaCriacaoPersonagem);
         if (botaoReiniciarFase1GameOver != null) botaoReiniciarFase1GameOver.onClick.AddListener(ReiniciarFaseAtualAposGameOver);
 
         TocarMusica(musicaInicio);
+    }
+    void Update()
+    {
+        if (Keyboard.current == null)
+            return;
+
+        // Continuar diálogo com E
+        if (Keyboard.current.eKey.wasPressedThisFrame)
+        {
+            if (botaoContinuar != null && botaoContinuar.gameObject.activeSelf)
+            {
+                ContinuarDialogo();
+            }
+        }
+
+        // Escolha 1
+        if (Keyboard.current.digit1Key.wasPressedThisFrame)
+        {
+            if (botaoEscolha1 != null && botaoEscolha1.gameObject.activeSelf)
+            {
+                botaoEscolha1.onClick.Invoke();
+            }
+        }
+
+        // Escolha 2
+        if (Keyboard.current.digit2Key.wasPressedThisFrame)
+        {
+            if (botaoEscolha2 != null && botaoEscolha2.gameObject.activeSelf)
+            {
+                botaoEscolha2.onClick.Invoke();
+            }
+        }
+
+        // Escolha 3
+        if (Keyboard.current.digit3Key.wasPressedThisFrame)
+        {
+            if (botaoEscolha3 != null && botaoEscolha3.gameObject.activeSelf)
+            {
+                botaoEscolha3.onClick.Invoke();
+            }
+        }
     }
 
     void AtivarEstadoInicial()
@@ -375,6 +425,14 @@ public class GerenciadorJogoTCC : MonoBehaviour
 
         return lista[Random.Range(0, lista.Count)];
     }
+    void TocarAnimacaoTextoFase()
+    {
+        if (animatorTextoFase == null)
+            return;
+
+        animatorTextoFase.ResetTrigger(triggerAnimacaoTextoFase);
+        animatorTextoFase.SetTrigger(triggerAnimacaoTextoFase);
+    }
 
     void IniciarFase(FaseProfissional fase)
     {
@@ -416,6 +474,7 @@ public class GerenciadorJogoTCC : MonoBehaviour
         if (textoClimaEquipe != null) textoClimaEquipe.gameObject.SetActive(true);
 
         AtualizarTextoFase();
+        TocarAnimacaoTextoFase();
         AtualizarMedidor();
         AtualizarClimaEquipe();
         TocarMusicaDaFase();
@@ -1572,7 +1631,13 @@ public class GerenciadorJogoTCC : MonoBehaviour
         }
 
         botao.gameObject.SetActive(true);
-        texto.text = opcoes[indice].textoOpcao;
+
+        // Mostra o número da tecla correspondente ao botão.
+        // Como as opções já são embaralhadas antes, o [1], [2] e [3]
+        // representam apenas a posição atual do botão, não a qualidade da resposta.
+        int numeroBotao = indice + 1;
+        texto.text = "<color=#6CC6FF>[" + numeroBotao + "]</color> " + opcoes[indice].textoOpcao;
+
         botao.onClick.RemoveAllListeners();
         botao.onClick.AddListener(() => EscolherOpcao(opcoes[indice]));
     }
@@ -1862,6 +1927,14 @@ public class GerenciadorJogoTCC : MonoBehaviour
         IniciarFase(faseDoGameOver);
     }
 
+    void ReiniciarFaseAtualPeloResultado()
+    {
+        if (painelResultadoFase != null)
+            painelResultadoFase.SetActive(false);
+
+        IniciarFase(faseAtual);
+    }
+
     void MostrarResultadoFase()
     {
         if (painelDialogo != null) painelDialogo.SetActive(false);
@@ -1903,6 +1976,22 @@ public class GerenciadorJogoTCC : MonoBehaviour
                 "Resolução de Problemas: " + resolucaoProblemas + "\n" +
                 "Adaptabilidade: " + adaptabilidade + "\n" +
                 "Empatia: " + empatia;
+        }
+
+        if (botaoContinuarFase != null)
+        {
+            botaoContinuarFase.gameObject.SetActive(aprovado);
+            botaoContinuarFase.onClick.RemoveAllListeners();
+
+            if (aprovado)
+                botaoContinuarFase.onClick.AddListener(ContinuarDepoisResultadoFase);
+        }
+
+        if (botaoReiniciarFaseResultado != null)
+        {
+            botaoReiniciarFaseResultado.gameObject.SetActive(true);
+            botaoReiniciarFaseResultado.onClick.RemoveAllListeners();
+            botaoReiniciarFaseResultado.onClick.AddListener(ReiniciarFaseAtualPeloResultado);
         }
     }
 
