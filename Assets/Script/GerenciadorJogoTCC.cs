@@ -17,6 +17,22 @@ public class GerenciadorJogoTCC : MonoBehaviour
     public GameObject painelResultadoFase;
     public GameObject painelFinal;
 
+    [Header("Seleção de fase")]
+    public GameObject painelSelecaoFase;
+    public TMP_Text textoSelecaoFase;
+    [TextArea(2, 4)]
+    public string mensagemSelecaoFase = "Escolha qual desafio deseja enfrentar agora. Cada fase representa um nível diferente da carreira em TI.";
+    public float velocidadeDigitacaoSelecaoFase = 0.035f;
+    public Button botaoFaseFacil;
+    public Button botaoFaseMedia;
+    public Button botaoFaseDificil;
+    public Button botaoRecriarPersonagemSelecao;
+
+    [Header("Feedback da resposta")]
+    public GameObject painelFeedback;
+    public TMP_Text textoFeedback;
+    public Button botaoContinuarFeedback;
+
     [Header("Animação do topo")]
     public Animator animatorTextoFase;
     public string triggerAnimacaoTextoFase = "MostrarFase";
@@ -32,6 +48,9 @@ public class GerenciadorJogoTCC : MonoBehaviour
     public GameObject fundo;
     public Image imagemFundo;
     public Sprite fundoTrabalhoTI;
+
+    [Tooltip("Imagem de fundo usada quando o painel de seleção de fase estiver ativo.")]
+    public Sprite fundoSelecaoFase;
 
     [Header("Transição de fase")]
     public Image imagemTransicaoPreta;
@@ -53,6 +72,7 @@ public class GerenciadorJogoTCC : MonoBehaviour
 
     [Header("Topo")]
     public TMP_Text textoFase;
+    public Button botaoVoltarSelecaoFase;
 
     [Header("Medidor de aprovação")]
     public Slider medidorAprovacao;
@@ -162,6 +182,8 @@ public class GerenciadorJogoTCC : MonoBehaviour
     private bool aguardandoResultadoFase;
     private int proximoNoAposReacao;
     private bool finalizarDepoisResultado;
+    private bool faseConcluidaPorAcertos;
+    private bool exibindoConclusaoFase;
 
     private bool textoDigitando;
     private Coroutine rotinaDigitacao;
@@ -170,6 +192,10 @@ public class GerenciadorJogoTCC : MonoBehaviour
 
     private bool nomeJaConfirmado;
     private Coroutine rotinaDigitacaoInicial;
+    private Coroutine rotinaDigitacaoSelecaoFase;
+
+    private OpcaoEscolha opcaoAguardandoFeedback;
+    private bool feedbackAguardandoContinuar;
 
     private const int TOTAL_PERGUNTAS_POR_FASE = 24;
 
@@ -209,6 +235,12 @@ public class GerenciadorJogoTCC : MonoBehaviour
         if (botaoContinuar != null) botaoContinuar.onClick.AddListener(ContinuarDialogo);
         if (botaoContinuarFase != null) botaoContinuarFase.onClick.AddListener(ContinuarDepoisResultadoFase);
         if (botaoReiniciarFaseResultado != null) botaoReiniciarFaseResultado.onClick.AddListener(ReiniciarFaseAtualPeloResultado);
+        if (botaoContinuarFeedback != null) botaoContinuarFeedback.onClick.AddListener(ContinuarDepoisFeedback);
+        if (botaoFaseFacil != null) botaoFaseFacil.onClick.AddListener(SelecionarFaseFacil);
+        if (botaoFaseMedia != null) botaoFaseMedia.onClick.AddListener(SelecionarFaseMedia);
+        if (botaoFaseDificil != null) botaoFaseDificil.onClick.AddListener(SelecionarFaseDificil);
+        if (botaoRecriarPersonagemSelecao != null) botaoRecriarPersonagemSelecao.onClick.AddListener(VoltarParaCriacaoPersonagem);
+        if (botaoVoltarSelecaoFase != null) botaoVoltarSelecaoFase.onClick.AddListener(VoltarParaSelecaoFase);
         if (botaoReiniciar != null) botaoReiniciar.onClick.AddListener(ReiniciarJogo);
         if (botaoVoltarCriacaoPersonagem != null) botaoVoltarCriacaoPersonagem.onClick.AddListener(VoltarParaCriacaoPersonagem);
         if (botaoReiniciarFase1GameOver != null) botaoReiniciarFase1GameOver.onClick.AddListener(ReiniciarFaseAtualAposGameOver);
@@ -220,6 +252,14 @@ public class GerenciadorJogoTCC : MonoBehaviour
         if (Keyboard.current == null)
             return;
 
+        if (feedbackAguardandoContinuar && painelFeedback != null && painelFeedback.activeSelf)
+        {
+            if (Keyboard.current.eKey.wasPressedThisFrame)
+                ContinuarDepoisFeedback();
+
+            return;
+        }
+
         // Continuar diálogo com E
         if (Keyboard.current.eKey.wasPressedThisFrame)
         {
@@ -228,6 +268,9 @@ public class GerenciadorJogoTCC : MonoBehaviour
                 ContinuarDialogo();
             }
         }
+
+        if (painelEscolhas == null || !painelEscolhas.activeSelf)
+            return;
 
         // Escolha 1
         if (Keyboard.current.digit1Key.wasPressedThisFrame)
@@ -266,8 +309,11 @@ public class GerenciadorJogoTCC : MonoBehaviour
         if (painelEscolhas != null) painelEscolhas.SetActive(false);
         if (painelResultadoFase != null) painelResultadoFase.SetActive(false);
         if (painelFinal != null) painelFinal.SetActive(false);
+        if (painelSelecaoFase != null) painelSelecaoFase.SetActive(false);
+        if (painelFeedback != null) painelFeedback.SetActive(false);
         if (painelGameOver != null) painelGameOver.SetActive(false);
         if (textoClimaEquipe != null) textoClimaEquipe.gameObject.SetActive(false);
+        if (botaoVoltarSelecaoFase != null) botaoVoltarSelecaoFase.gameObject.SetActive(false);
         if (fundo != null) fundo.SetActive(false);
         PrepararImagemTransicao(false, 0f);
 
@@ -374,8 +420,110 @@ public class GerenciadorJogoTCC : MonoBehaviour
         if (painelInicio != null) painelInicio.SetActive(false);
         if (painelDadosIniciais != null) painelDadosIniciais.SetActive(false);
 
-        faseAtual = FaseProfissional.FacilJunior;
-        IniciarFase(faseAtual);
+        MostrarSelecaoFase();
+    }
+
+    void DigitarTextoSelecaoFase()
+    {
+        if (textoSelecaoFase == null)
+            return;
+
+        if (rotinaDigitacaoSelecaoFase != null)
+            StopCoroutine(rotinaDigitacaoSelecaoFase);
+
+        rotinaDigitacaoSelecaoFase = StartCoroutine(DigitarTextoSelecaoFaseRotina(mensagemSelecaoFase));
+    }
+
+    IEnumerator DigitarTextoSelecaoFaseRotina(string texto)
+    {
+        textoSelecaoFase.text = "";
+
+        for (int i = 0; i <= texto.Length; i++)
+        {
+            textoSelecaoFase.text = texto.Substring(0, i);
+            yield return new WaitForSeconds(velocidadeDigitacaoSelecaoFase);
+        }
+    }
+
+    void MostrarSelecaoFase()
+    {
+        if (rotinaDigitacao != null)
+            StopCoroutine(rotinaDigitacao);
+
+        if (rotinaDigitacaoSelecaoFase != null)
+            StopCoroutine(rotinaDigitacaoSelecaoFase);
+
+        textoDigitando = false;
+        exibindoReacaoEscolha = false;
+        aguardandoResultadoFase = false;
+        feedbackAguardandoContinuar = false;
+        opcaoAguardandoFeedback = null;
+
+        if (painelInicio != null) painelInicio.SetActive(false);
+        if (painelDadosIniciais != null) painelDadosIniciais.SetActive(false);
+        if (painelSelecaoFase != null) painelSelecaoFase.SetActive(true);
+        if (painelTopo != null) painelTopo.SetActive(false);
+        if (painelDialogo != null) painelDialogo.SetActive(false);
+        if (painelEscolhas != null) painelEscolhas.SetActive(false);
+        if (painelResultadoFase != null) painelResultadoFase.SetActive(false);
+        if (painelFinal != null) painelFinal.SetActive(false);
+        if (painelGameOver != null) painelGameOver.SetActive(false);
+        if (painelFeedback != null) painelFeedback.SetActive(false);
+        if (textoClimaEquipe != null) textoClimaEquipe.gameObject.SetActive(false);
+        if (botaoVoltarSelecaoFase != null) botaoVoltarSelecaoFase.gameObject.SetActive(false);
+
+        if (fundo != null) fundo.SetActive(true);
+        if (imagemFundo != null)
+        {
+            if (fundoSelecaoFase != null)
+                imagemFundo.sprite = fundoSelecaoFase;
+            else if (fundoTrabalhoTI != null)
+                imagemFundo.sprite = fundoTrabalhoTI;
+        }
+
+        if (controladorCena != null)
+            controladorCena.EsconderTodos();
+
+        TocarMusica(musicaInicio);
+        DigitarTextoSelecaoFase();
+    }
+
+    void SelecionarFaseFacil()
+    {
+        IniciarFase(FaseProfissional.FacilJunior);
+    }
+
+    void SelecionarFaseMedia()
+    {
+        IniciarFase(FaseProfissional.MedioPleno);
+    }
+
+    void SelecionarFaseDificil()
+    {
+        IniciarFase(FaseProfissional.DificilSenior);
+    }
+
+    void VoltarParaSelecaoFase()
+    {
+        MostrarSelecaoFase();
+    }
+
+    int AcertosNecessarios(FaseProfissional fase)
+    {
+        switch (fase)
+        {
+            case FaseProfissional.FacilJunior:
+                return 3;
+
+            case FaseProfissional.MedioPleno:
+                return 5;
+
+            case FaseProfissional.DificilSenior:
+                return 8;
+
+            default:
+                return 0;
+        }
     }
 
     bool ListasDeNPCsValidas()
@@ -436,7 +584,16 @@ public class GerenciadorJogoTCC : MonoBehaviour
 
     void IniciarFase(FaseProfissional fase)
     {
+        if (rotinaDigitacaoSelecaoFase != null)
+            StopCoroutine(rotinaDigitacaoSelecaoFase);
+
         faseAtual = fase;
+
+        comunicacao = 0;
+        trabalhoEquipe = 0;
+        resolucaoProblemas = 0;
+        adaptabilidade = 0;
+        empatia = 0;
 
         pontosFaseAtual = 0;
         pontosMaximosFase = TOTAL_PERGUNTAS_POR_FASE * 2;
@@ -459,19 +616,24 @@ public class GerenciadorJogoTCC : MonoBehaviour
         aguardandoResultadoFase = false;
         proximoNoAposReacao = -1;
         finalizarDepoisResultado = false;
+        feedbackAguardandoContinuar = false;
+        opcaoAguardandoFeedback = null;
         ultimaEmocaoPersonagem = Emocao.Neutro;
         emocaoAtualJogador = Emocao.Neutro;
 
         if (fundo != null) fundo.SetActive(true);
         if (imagemFundo != null && fundoTrabalhoTI != null) imagemFundo.sprite = fundoTrabalhoTI;
 
+        if (painelSelecaoFase != null) painelSelecaoFase.SetActive(false);
         if (painelTopo != null) painelTopo.SetActive(true);
         if (painelDialogo != null) painelDialogo.SetActive(true);
         if (painelEscolhas != null) painelEscolhas.SetActive(false);
         if (painelResultadoFase != null) painelResultadoFase.SetActive(false);
         if (painelFinal != null) painelFinal.SetActive(false);
         if (painelGameOver != null) painelGameOver.SetActive(false);
+        if (painelFeedback != null) painelFeedback.SetActive(false);
         if (textoClimaEquipe != null) textoClimaEquipe.gameObject.SetActive(true);
+        if (botaoVoltarSelecaoFase != null) botaoVoltarSelecaoFase.gameObject.SetActive(true);
 
         AtualizarTextoFase();
         TocarAnimacaoTextoFase();
@@ -483,7 +645,9 @@ public class GerenciadorJogoTCC : MonoBehaviour
 
         indiceNoAtual = 0;
 
-        if (usarTransicaoAoComecarPrimeiraFase && fase == FaseProfissional.FacilJunior)
+        // Agora a transição acontece em TODAS as fases:
+        // Fácil, Média e Difícil.
+        if (usarTransicaoAoComecarPrimeiraFase)
             StartCoroutine(TransicaoInicioPrimeiraFase());
         else
             MostrarNoAtual();
@@ -561,13 +725,13 @@ public class GerenciadorJogoTCC : MonoBehaviour
         switch (fase)
         {
             case FaseProfissional.FacilJunior:
-                return "1ª Fase - Fácil (Júnior de TI)";
+                return "1ª Fase - Rápido (Júnior de TI)";
 
             case FaseProfissional.MedioPleno:
-                return "2ª Fase - Média (Pleno de TI)";
+                return "2ª Fase - Intermediário (Pleno de TI)";
 
             case FaseProfissional.DificilSenior:
-                return "3ª Fase - Difícil (Sênior de TI)";
+                return "3ª Fase - Avançado (Sênior de TI)";
 
             default:
                 return "";
@@ -594,16 +758,14 @@ public class GerenciadorJogoTCC : MonoBehaviour
 
     void AtualizarMedidor()
     {
-        float valor = 0f;
-
-        if (pontosMaximosFase > 0)
-            valor = (float)pontosFaseAtual / pontosMaximosFase;
+        int necessario = Mathf.Max(1, AcertosNecessarios(faseAtual));
+        float valor = Mathf.Clamp01((float)totalEscolhasBoas / necessario);
 
         if (medidorAprovacao != null)
             medidorAprovacao.value = valor;
 
         if (textoMedidorAprovacao != null)
-            textoMedidorAprovacao.text = "Aprovação: " + Mathf.RoundToInt(valor * 100f) + "% / Necessário: " + PorcentagemNecessaria(faseAtual).ToString("F0") + "%";
+            textoMedidorAprovacao.text = "Acertos: " + totalEscolhasBoas + " / " + necessario;
     }
 
 
@@ -887,416 +1049,217 @@ public class GerenciadorJogoTCC : MonoBehaviour
         return Emocao.Neutro;
     }
 
-    string CriarFalaNPC(FaseProfissional fase, CategoriaSoftSkill categoria, DadosPersonagem npc, int indice)
+
+    private class DialogoInfo
     {
-        string[] falas;
+        public string fala;
+        public string softSkills;
 
-        if (fase == FaseProfissional.FacilJunior)
-        {
-            falas = new string[]
-            {
-                "A task que chegou pra você está com informações faltando. Eu percebi isso agora olhando o card. Antes de sair codando, precisamos entender o que realmente foi pedido.",
-                "O QA já marcou dois pontos que não batem com o que está no Jira. Não é grave ainda, mas se a gente deixar passar, vira retrabalho no fim do dia.",
-                "Eu sei que você acabou de entrar, então não precisa fingir que entendeu tudo. O importante agora é mostrar como você tira dúvida sem travar a entrega.",
-                "O pull request voltou com comentários simples, mas alguns deles mudam o comportamento da tela. A gente precisa responder sem parecer que está só se defendendo.",
-                "Produto pediu uma alteração pequena agora no meio da sprint. Pequena no papel, porque no código ela mexe em mais coisa do que parece.",
-                "Tem uma pessoa do time tentando te ajudar, mas ela também está cheia de tarefa. Se você pedir ajuda, precisa chegar com contexto, não só com 'não funciona'.",
-                "Esse bug não derruba o sistema, mas bloqueia o teste do QA. Se você ignorar porque parece pequeno, todo mundo fica parado esperando.",
-                "O backend disse que a regra está certa, mas o comportamento na tela está diferente. Antes de apontar erro, melhor juntar as informações.",
-                "A daily começa em alguns minutos. Se você falar só 'estou fazendo', ninguém vai saber que existe risco nessa entrega.",
-                "A gente pode resolver isso sem drama, mas precisa de clareza. O problema é pequeno; o ruído em volta dele é que pode crescer.",
-                "O card foi escrito rápido demais e agora sobrou pra equipe interpretar. Vamos arrumar isso antes que cada pessoa siga por um caminho diferente.",
-                "Eu vi que você tentou corrigir sozinho. A intenção é boa, mas ficar muito tempo calado pode passar a impressão errada.",
-                "O comentário no pull request não foi uma bronca. É só parte do processo. A forma como você responde também conta.",
-                "Tem uma mudança de prioridade chegando. Não é pra largar tudo de qualquer jeito, mas também não dá pra fingir que nada mudou.",
-                "O QA está pressionado porque precisa fechar os testes ainda hoje. Se a gente responder mal, a conversa vira conflito em vez de solução.",
-                "A tarefa parece simples, mas tem uma regra de negócio escondida nela. É melhor confirmar agora do que descobrir depois da entrega.",
-                "O time está tentando entender se isso é bug ou requisito mal explicado. Sua resposta pode ajudar a organizar a conversa.",
-                "A pessoa que abriu o card não está online agora. Mesmo assim, precisamos deixar registrado o que falta pra ninguém se perder.",
-                "Eu não espero que você resolva tudo sozinho. Eu espero que você saiba mostrar onde está a dúvida e o que já tentou.",
-                "A alteração parece pequena, mas se entrar sem teste pode quebrar outra parte. Vamos pensar antes de correr.",
-                "Tem gente falando por mensagem, gente comentando no Jira e gente discutindo no PR. Se ninguém organizar, isso vira bagunça.",
-                "O prazo está apertado, mas ainda dá pra salvar a entrega. Só não dá pra trabalhar no escuro.",
-                "Você vai perceber que desenvolvimento não é só escrever código. Metade do problema aqui é alinhar expectativa.",
-                "Antes de fechar essa task, precisamos ter certeza de que todo mundo está falando da mesma coisa. Senão o erro volta pra você depois."
-            };
-        }
-        else if (fase == FaseProfissional.MedioPleno)
-        {
-            falas = new string[]
-            {
-                "A sprint já começou atrasada e agora frontend, backend e QA estão defendendo versões diferentes do mesmo problema. A gente precisa colocar ordem nisso.",
-                "Produto mudou o requisito de novo. Eu entendo a urgência, mas se aceitarmos tudo sem discutir impacto, a sprint quebra de vez.",
-                "O QA está dizendo que avisou sobre esse risco ontem. O dev respondeu que a regra não estava clara. Agora os dois lados estão irritados.",
-                "Tem uma refatoração que todo mundo sabe que precisa acontecer, mas sempre perde espaço pra demanda urgente. Hoje ela voltou a bloquear uma entrega.",
-                "Você já não está mais numa posição de só receber tarefa. O time espera que você ajude a traduzir o problema entre as áreas.",
-                "A discussão começou técnica, mas já virou pessoal. Se a gente deixar continuar assim, ninguém vai ouvir a solução de ninguém.",
-                "A demanda do cliente é importante, mas a dívida técnica está cobrando juros. Precisamos decidir o que dá pra entregar sem criar uma bomba maior.",
-                "O time está tentando fechar a sprint, mas tem gente trabalhando em prioridade antiga porque ninguém atualizou o combinado.",
-                "O pull request virou debate. Tem comentário útil ali, mas também tem resposta atravessada. Precisamos baixar a temperatura.",
-                "Produto quer resposta rápida. QA quer segurança. Desenvolvimento quer tempo. Nenhum lado está completamente errado.",
-                "Se você só executar a tarefa, talvez entregue. Se você alinhar o impacto, talvez evite que o problema volte semana que vem.",
-                "A pessoa mais nova do time assumiu uma parte difícil e agora está claramente perdida. Ela não pediu ajuda, mas o atraso já apareceu.",
-                "A reunião está começando a virar disputa de culpa. Eu preciso que alguém traga a conversa de volta para fatos e próximos passos.",
-                "A mudança parece pequena para produto, mas tecnicamente toca em fluxo antigo. Se dissermos só 'não dá', eles não vão entender.",
-                "O QA encontrou um comportamento diferente do esperado, mas o requisito realmente está ambíguo. Aqui não adianta vencer discussão; tem que fechar entendimento.",
-                "Você conhece essa parte do sistema melhor que quase todo mundo. Por isso sua forma de falar pode acalmar ou incendiar o time.",
-                "A sprint não vai caber do jeito que está. Alguém vai precisar negociar escopo sem transformar isso em guerra.",
-                "O legado está limitando a entrega, mas mexer nele agora tem risco. A decisão precisa ser madura, não só rápida.",
-                "Tem uma pessoa sobrecarregada cobrindo duas frentes. Se a gente fingir que está tudo normal, a qualidade vai cair.",
-                "A liderança quer saber o que está impedindo a entrega. Se a resposta sair mal construída, parece desculpa em vez de diagnóstico.",
-                "A equipe precisa de uma decisão, mas uma decisão apressada pode custar caro. Vamos separar urgência de impulso.",
-                "O conflito entre dev e QA está escondendo o ponto principal: ninguém fechou critério de aceite direito.",
-                "Eu preciso que você pense como pleno agora: entrega, pessoas e consequência. Não dá pra olhar só pro pedaço técnico.",
-                "Ainda dá pra recuperar a sprint, mas não se cada pessoa continuar protegendo só a própria parte."
-            };
-        }
-        else
-        {
-            falas = new string[]
-            {
-                "O incidente em produção já impactou cliente e a diretoria quer uma previsão. O time está olhando pra você porque alguém precisa organizar a resposta.",
-                "A correção rápida existe, mas pode mascarar a causa real. Se aplicarmos agora, talvez estabilize; se der errado, a confiança cai mais ainda.",
-                "A war room está aberta há horas. Tem gente cansada, tem cliente cobrando e tem liderança pedindo uma explicação que ainda não temos completa.",
-                "Dois especialistas discordam sobre a arquitetura. Os dois têm bons argumentos, mas a decisão não pode virar disputa de ego.",
-                "O cliente quer saber quando volta. A equipe quer tempo pra investigar. A diretoria quer uma mensagem segura. Nada disso pode ser tratado isolado.",
-                "Alguém deixou passar um alerta importante, mas agora caçar culpado só vai fazer as pessoas esconderem informação. Precisamos resolver e aprender.",
-                "A estabilidade está no limite. Se mexermos demais, podemos piorar. Se mexermos de menos, o cliente continua parado.",
-                "Tem um dev segurando a bronca desde madrugada. Ele está exausto e começou a cometer erro bobo. Isso também é risco técnico.",
-                "A decisão de arquitetura que parecia distante virou problema de produção hoje. Agora precisamos escolher um caminho sem romantizar solução perfeita.",
-                "A comunicação externa precisa ser honesta, mas não pode jogar a equipe no fogo. O cliente precisa de clareza, não de pânico.",
-                "O time está esperando uma direção. Se você hesitar demais, cada um vai agir por conta própria.",
-                "O rollback resolve parte do impacto, mas joga fora trabalho importante. Manter a versão atual exige confiança numa correção que ainda não foi validada.",
-                "A liderança quer um responsável pelo incidente. Eu prefiro sair daqui com causa, plano e prevenção. Mas a pressão por culpado está crescendo.",
-                "Tem gente experiente se atacando porque todo mundo está sob pressão. Se isso continuar, a crise técnica vira crise de equipe.",
-                "O cliente percebeu inconsistência nos dados. Mesmo que a falha seja pequena, a confiança foi atingida.",
-                "A equipe precisa saber o que comunicar no próximo status report. Silêncio agora parece omissão; excesso de detalhe pode gerar alarme.",
-                "A solução definitiva exige tempo que talvez não tenhamos. O contorno rápido exige risco que talvez não possamos assumir.",
-                "Uma pessoa assumiu um erro no privado, mas tem medo de falar na reunião. A verdade importa, mas a forma como lidamos com ela também.",
-                "A diretoria está pressionando por garantia. Só que garantia absoluta, nesse momento, seria mentira.",
-                "O cliente quer uma data. A engenharia quer mais diagnóstico. Produto quer manter compromisso comercial. Você precisa equilibrar essas forças.",
-                "O sistema voltou parcialmente, mas ainda instável. Se comemorarmos cedo demais, podemos perder credibilidade.",
-                "A decisão técnica de agora vai virar precedente. O time vai aprender com o que você tolera em crise.",
-                "Tem uma reunião com stakeholders em poucos minutos. Precisamos transformar caos técnico em uma mensagem responsável.",
-                "A crise está quase controlada, mas o pós-incidente vai definir se isso vira aprendizado ou só mais uma cicatriz na equipe."
-            };
-        }
+        public string botaoBom;
+        public string respostaBoa;
+        public string reacaoBoa;
 
-        return AjustarFalaPelaPersonalidade(npc, falas[indice % falas.Length]);
+        public string botaoMedio;
+        public string respostaMedia;
+        public string reacaoMedia;
+
+        public string botaoRuim;
+        public string respostaRuim;
+        public string reacaoRuim;
     }
 
-    string AjustarFalaPelaPersonalidade(DadosPersonagem npc, string falaBase)
+    DialogoInfo D(
+        string fala,
+        string softSkills,
+        string botaoBom,
+        string respostaBoa,
+        string reacaoBoa,
+        string botaoMedio,
+        string respostaMedia,
+        string reacaoMedia,
+        string botaoRuim,
+        string respostaRuim,
+        string reacaoRuim)
     {
-        if (npc == null)
-            return falaBase;
-
-        switch (npc.personalidade)
+        return new DialogoInfo
         {
-            case PersonalidadePersonagem.Irritado:
-                return falaBase + " E eu prefiro resolver isso agora, antes que vire mais uma reunião sem fim.";
+            fala = fala,
+            softSkills = softSkills,
+            botaoBom = botaoBom,
+            respostaBoa = respostaBoa,
+            reacaoBoa = reacaoBoa,
+            botaoMedio = botaoMedio,
+            respostaMedia = respostaMedia,
+            reacaoMedia = reacaoMedia,
+            botaoRuim = botaoRuim,
+            respostaRuim = respostaRuim,
+            reacaoRuim = reacaoRuim
+        };
+    }
 
-            case PersonalidadePersonagem.Calmo:
-                return falaBase + " Vamos respirar e organizar isso por partes.";
+    DialogoInfo ObterDialogoInfo(FaseProfissional fase, int indice)
+    {
+        DialogoInfo[] dialogos;
 
-            case PersonalidadePersonagem.Gentil:
-                return falaBase + " Ninguém precisa resolver sozinho, mas todo mundo precisa ser claro.";
+        if (fase == FaseProfissional.FacilJunior)
+            dialogos = DialogosJunior();
+        else if (fase == FaseProfissional.MedioPleno)
+            dialogos = DialogosPleno();
+        else
+            dialogos = DialogosSenior();
 
-            case PersonalidadePersonagem.Competitivo:
-                return falaBase + " Outros times não esperariam isso sair do controle.";
+        if (dialogos == null || dialogos.Length == 0)
+            return D("Temos uma situação para resolver.", "Comunicação", "Vou agir com calma.", "Vou analisar a situação com calma.", "Boa postura.", "Vou tentar resolver.", "Vou tentar resolver do jeito possível.", "Resposta parcial.", "Vou fazer do meu jeito.", "Vou fazer do meu jeito.", "Essa postura pode prejudicar a equipe.");
 
-            case PersonalidadePersonagem.Inseguro:
-                return falaBase + " Eu só não quero que isso estoure maior do que já está.";
+        return dialogos[Mathf.Abs(indice) % dialogos.Length];
+    }
 
-            case PersonalidadePersonagem.Engracado:
-                return falaBase + " Se o sistema queria testar nossa paciência, conseguiu.";
-
-            case PersonalidadePersonagem.Serio:
-                return falaBase + " Preciso de uma resposta objetiva e responsável.";
-
-            case PersonalidadePersonagem.Extrovertido:
-                return falaBase + " Vamos colocar todo mundo na mesma página antes que isso vire telefone sem fio.";
-
-            case PersonalidadePersonagem.Timido:
-                return falaBase + " Talvez seja melhor alinhar com cuidado antes de falar com o grupo todo.";
-        }
-
-        return falaBase;
+    string CriarFalaNPC(FaseProfissional fase, CategoriaSoftSkill categoria, DadosPersonagem npc, int indice)
+    {
+        return ObterDialogoInfo(fase, indice).fala;
     }
 
     string CriarTextoBotaoBom(FaseProfissional fase, CategoriaSoftSkill categoria, int indice)
     {
-        return EscolherMiniResposta(fase, categoria, TomResposta.Boa, indice);
+        return ObterDialogoInfo(fase, indice).botaoBom;
     }
 
     string CriarTextoBotaoMedio(FaseProfissional fase, CategoriaSoftSkill categoria, int indice)
     {
-        return EscolherMiniResposta(fase, categoria, TomResposta.Neutra, indice);
+        return ObterDialogoInfo(fase, indice).botaoMedio;
     }
 
     string CriarTextoBotaoRuim(FaseProfissional fase, CategoriaSoftSkill categoria, int indice)
     {
-        return EscolherMiniResposta(fase, categoria, TomResposta.Rude, indice);
-    }
-
-    string EscolherMiniResposta(FaseProfissional fase, CategoriaSoftSkill categoria, TomResposta tom, int indice)
-    {
-        string[] opcoes = ObterBancoMiniRespostas(fase, categoria, tom);
-
-        if (opcoes == null || opcoes.Length == 0)
-            return "Vou responder.";
-
-        int deslocamentoFase = 0;
-
-        if (fase == FaseProfissional.MedioPleno)
-            deslocamentoFase = 2;
-        else if (fase == FaseProfissional.DificilSenior)
-            deslocamentoFase = 4;
-
-        int deslocamentoCategoria = ((int)categoria * 3);
-        int indiceFinal = Mathf.Abs(indice + deslocamentoFase + deslocamentoCategoria) % opcoes.Length;
-        return opcoes[indiceFinal];
-    }
-
-    string[] ObterBancoMiniRespostas(FaseProfissional fase, CategoriaSoftSkill categoria, TomResposta tom)
-    {
-        if (fase == FaseProfissional.FacilJunior)
-            return ObterMiniRespostasJunior(categoria, tom);
-
-        if (fase == FaseProfissional.MedioPleno)
-            return ObterMiniRespostasPleno(categoria, tom);
-
-        return ObterMiniRespostasSenior(categoria, tom);
-    }
-
-    string[] ObterMiniRespostasJunior(CategoriaSoftSkill categoria, TomResposta tom)
-    {
-        switch (categoria)
-        {
-            case CategoriaSoftSkill.Comunicacao:
-                if (tom == TomResposta.Boa) return new string[] { "Vou confirmar antes.", "Melhor alinhar o card.", "Vou perguntar o que falta.", "Deixo a dúvida registrada.", "Vou validar com o QA.", "Antes de codar, confirmo." };
-                if (tom == TomResposta.Neutra) return new string[] { "Tento seguir assim.", "Vou avançar e ajustar.", "Se travar, eu pergunto.", "Acho que entendi o suficiente.", "Começo pelo que está claro.", "Vou ver no caminho." };
-                return new string[] { "Faço do jeito que der.", "O card veio assim.", "Não vou parar por isso.", "Se der errado, corrigem.", "Vou interpretar sozinho.", "Não dá pra esperar." };
-
-            case CategoriaSoftSkill.TrabalhoEquipe:
-                if (tom == TomResposta.Boa) return new string[] { "Chego com contexto.", "Peço ajuda do jeito certo.", "Vamos dividir melhor.", "Mostro o que tentei.", "Alinho com quem depende disso.", "Chamo alguém pra destravar." };
-                if (tom == TomResposta.Neutra) return new string[] { "Faço minha parte.", "Ajudo se pedirem.", "Tento não atrapalhar.", "Vou resolver meu lado.", "Deixo o time seguir.", "Pergunto só se precisar." };
-                return new string[] { "Isso não é comigo.", "Cada um resolve o seu.", "Não vou puxar problema.", "Quem abriu que arrume.", "Eu só sigo minha tarefa.", "Não vou me envolver." };
-
-            case CategoriaSoftSkill.ResolucaoProblemas:
-                if (tom == TomResposta.Boa) return new string[] { "Vou reproduzir primeiro.", "Testo antes de mexer.", "Procuro a causa real.", "Vou isolar o erro.", "Faço uma correção segura.", "Investigo passo a passo." };
-                if (tom == TomResposta.Neutra) return new string[] { "Tento uma solução rápida.", "Corrijo o mais visível.", "Faço um teste simples.", "Vou pelo caminho curto.", "Se passar, seguimos.", "Ajusto o básico agora." };
-                return new string[] { "Chuto uma correção.", "Mudo e vejo se passa.", "Apago esse trecho.", "Deve ser coisa simples.", "Mexendo eu descubro.", "Vou direto no código." };
-
-            case CategoriaSoftSkill.Adaptabilidade:
-                if (tom == TomResposta.Boa) return new string[] { "Reorganizo a tarefa.", "Confirmo o novo combinado.", "Ajusto antes de seguir.", "Vejo o que mudou de verdade.", "Priorizo o que importa.", "Atualizo o plano." };
-                if (tom == TomResposta.Neutra) return new string[] { "Vou tentar encaixar.", "Termino o que comecei.", "Mudo se for necessário.", "Ajusto depois dessa parte.", "Dá pra adaptar no caminho.", "Sigo até avisarem melhor." };
-                return new string[] { "Avisaram tarde demais.", "Agora não dá mais.", "Vou manter como estava.", "Mudaram de novo?", "Não vou refazer tudo.", "Isso atrasa por culpa deles." };
-
-            case CategoriaSoftSkill.Empatia:
-                if (tom == TomResposta.Boa) return new string[] { "Vou ouvir primeiro.", "Pergunto como posso ajudar.", "Respondo sem pressionar.", "Tento aliviar a conversa.", "Entendo o lado deles.", "Falo com calma." };
-                if (tom == TomResposta.Neutra) return new string[] { "Deixo a pessoa respirar.", "Não vou entrar nisso agora.", "Mantenho a conversa objetiva.", "Espero ela pedir ajuda.", "Falo só do trabalho.", "Evito aumentar o clima." };
-                return new string[] { "Cada um com sua pressão.", "Ela devia ter avisado.", "Não é problema meu.", "Pressão todo mundo tem.", "Agora não é hora disso.", "Se errou, precisa ouvir." };
-        }
-
-        return new string[] { "Vou responder." };
-    }
-
-    string[] ObterMiniRespostasPleno(CategoriaSoftSkill categoria, TomResposta tom)
-    {
-        switch (categoria)
-        {
-            case CategoriaSoftSkill.Comunicacao:
-                if (tom == TomResposta.Boa) return new string[] { "Vamos fechar entendimento.", "Preciso alinhar o impacto.", "Vou colocar todos na mesma página.", "Antes de prometer, valido.", "Traduzo isso pro time.", "Organizo os pontos abertos." };
-                if (tom == TomResposta.Neutra) return new string[] { "Aviso depois do urgente.", "Resolvo e comunico depois.", "Passo só o essencial.", "Vou falar quando tiver certeza.", "Alinho se perguntarem.", "Deixo a conversa pra depois." };
-                return new string[] { "Produto precisa decidir.", "QA que prove o ponto.", "Não dá pra explicar tudo.", "Quem pediu que detalhe.", "Vou responder direto.", "Não vou justificar atraso." };
-
-            case CategoriaSoftSkill.TrabalhoEquipe:
-                if (tom == TomResposta.Boa) return new string[] { "Junto os envolvidos.", "Vamos tirar isso do pessoal.", "Separar fato de culpa.", "Alinho a decisão com todos.", "Trago o foco pro próximo passo.", "Faço a ponte entre áreas." };
-                if (tom == TomResposta.Neutra) return new string[] { "Ajudo só no meu ponto.", "Não entro no conflito.", "Deixo eles se resolverem.", "Foco na minha entrega.", "Entro se travar mais.", "Evito tomar partido." };
-                return new string[] { "Quem atrasou resolve.", "Alguém precisa assumir.", "Isso é culpa de uma área.", "Não vou carregar o time.", "Cada lado que se vire.", "Eu avisei que daria ruim." };
-
-            case CategoriaSoftSkill.ResolucaoProblemas:
-                if (tom == TomResposta.Boa) return new string[] { "Resolvo sem criar bomba.", "Ataco causa e impacto.", "Faço o mínimo seguro.", "Proponho uma saída sustentável.", "Contorno com plano depois.", "Evito gambiarra escondida." };
-                if (tom == TomResposta.Neutra) return new string[] { "Corrijo o urgente.", "Depois vemos a causa.", "Faço passar na sprint.", "Entrego o possível agora.", "Ajusto só o bloqueio.", "Não mexo além disso." };
-                return new string[] { "Troco e vejo se passa.", "A sprint precisa fechar.", "Depois alguém refatora.", "Corto esse fluxo agora.", "O legado que aguente.", "Faço rápido e pronto." };
-
-            case CategoriaSoftSkill.Adaptabilidade:
-                if (tom == TomResposta.Boa) return new string[] { "Renegocio prioridade.", "Replanejo com o time.", "Mostro o custo da mudança.", "Ajusto sem esconder risco.", "Corto escopo com critério.", "Faço o combinado caber." };
-                if (tom == TomResposta.Neutra) return new string[] { "Aceito, mas vai apertar.", "Tento encaixar na sprint.", "Dá pra mudar um pouco.", "Seguimos e vemos depois.", "Faço o possível.", "Ajusto sem prometer muito." };
-                return new string[] { "Continuo o plano antigo.", "Isso quebra a sprint.", "Produto mudou tarde.", "Não vou refazer prioridade.", "Agora eles que esperem.", "Isso não cabe mais." };
-
-            case CategoriaSoftSkill.Empatia:
-                if (tom == TomResposta.Boa) return new string[] { "Converso sem expor.", "Vejo quem está sobrecarregado.", "Redistribuo sem culpar.", "Chamo no privado.", "Protejo o clima do time.", "Entendo antes de cobrar." };
-                if (tom == TomResposta.Neutra) return new string[] { "Mantenho profissional.", "Falo só da entrega.", "Não entro no lado pessoal.", "Deixo isso pra liderança.", "Evito aumentar o conflito.", "Cobro com cuidado." };
-                return new string[] { "Ela devia ter pedido ajuda.", "Todo mundo está cansado.", "Não dá pra passar pano.", "Se atrasou, precisa ouvir.", "O time não pode parar por isso.", "Erro tem consequência." };
-        }
-
-        return new string[] { "Vou responder." };
-    }
-
-    string[] ObterMiniRespostasSenior(CategoriaSoftSkill categoria, TomResposta tom)
-    {
-        switch (categoria)
-        {
-            case CategoriaSoftSkill.Comunicacao:
-                if (tom == TomResposta.Boa) return new string[] { "Passo risco e próximo status.", "Comunico sem gerar pânico.", "Alinho cliente e liderança.", "Falo o que sabemos agora.", "Assumo a comunicação da crise.", "Organizo uma atualização clara." };
-                if (tom == TomResposta.Neutra) return new string[] { "Falo só o confirmado.", "Atualizo quando fechar causa.", "Seguro a comunicação por enquanto.", "Passo uma previsão curta.", "Evito detalhes agora.", "Comunico o mínimo necessário." };
-                return new string[] { "Melhor não abrir o risco.", "Digo que já está resolvendo.", "A diretoria não precisa saber tudo.", "Seguro isso internamente.", "Não dá pra expor o time.", "Falo depois que estabilizar." };
-
-            case CategoriaSoftSkill.TrabalhoEquipe:
-                if (tom == TomResposta.Boa) return new string[] { "Divido as frentes da crise.", "Tiro o foco da culpa.", "Organizo quem faz o quê.", "Protejo o time e conduzo.", "Centralizo a decisão.", "Coloco ordem na war room." };
-                if (tom == TomResposta.Neutra) return new string[] { "Cada frente segue sua parte.", "Entro se a discussão travar.", "Deixo os líderes conduzirem.", "Acompanho sem interferir muito.", "Cobro atualização por área.", "Mantenho a sala rodando." };
-                return new string[] { "Alguém precisa ser cobrado.", "Vou cortar a discussão agora.", "Quem causou sai da frente.", "Imponho a decisão e pronto.", "Não temos tempo pra consenso.", "A equipe que aguente a pressão." };
-
-            case CategoriaSoftSkill.ResolucaoProblemas:
-                if (tom == TomResposta.Boa) return new string[] { "Estabilizo antes de mexer.", "Contorno sem apagar evidência.", "Isolo o impacto no cliente.", "Investigo com segurança.", "Reduzo dano e preservo causa.", "Faço correção controlada." };
-                if (tom == TomResposta.Neutra) return new string[] { "Aplico o contorno rápido.", "Depois vemos causa raiz.", "Restauro primeiro, explico depois.", "Faço voltar e monitoro.", "Corto o fluxo problemático.", "Priorizo tirar do ar o erro." };
-                return new string[] { "Mudo direto em produção.", "Derruba e sobe de novo.", "Desfaço sem investigar.", "Forço o rollback agora.", "Apago o que está quebrando.", "Depois entendemos o estrago." };
-
-            case CategoriaSoftSkill.Adaptabilidade:
-                if (tom == TomResposta.Boa) return new string[] { "Reorganizo pelo risco atual.", "Mudo o plano com critério.", "Renegocio com transparência.", "Priorizo estabilidade agora.", "Corto escopo sem esconder impacto.", "Adapto sem perder controle." };
-                if (tom == TomResposta.Neutra) return new string[] { "Ajusto o plano no caminho.", "Seguimos com o que der.", "Mudo só o essencial.", "Seguro decisões grandes agora.", "Faço uma correção de rota.", "Depois replanejamos melhor." };
-                return new string[] { "Agora não dá pra mudar.", "Mantemos o plano original.", "A crise não muda a meta.", "Não vou abrir renegociação.", "O cliente vai ter que esperar.", "Mudar agora piora tudo." };
-
-            case CategoriaSoftSkill.Empatia:
-                if (tom == TomResposta.Boa) return new string[] { "Protejo o time agora.", "Cobrança fica pro pós-crise.", "Conduzo sem expor ninguém.", "Acalmo antes de cobrar.", "Assumo a frente da conversa.", "O time precisa respirar." };
-                if (tom == TomResposta.Neutra) return new string[] { "Cobro sem alongar.", "Mantenho o foco técnico.", "Deixo emoção pra depois.", "Faço uma conversa objetiva.", "Evito exposição pública.", "Seguramos o clima agora." };
-                return new string[] { "Agora é hora de cobrar.", "Quem errou precisa falar.", "Não vou aliviar ninguém.", "A equipe precisa sentir o peso.", "Medo faz parte da crise.", "Depois a gente vê o clima." };
-        }
-
-        return new string[] { "Vou responder." };
+        return ObterDialogoInfo(fase, indice).botaoRuim;
     }
 
     string CriarRespostaBoa(FaseProfissional fase, CategoriaSoftSkill categoria, int indice)
     {
-        switch (categoria)
-        {
-            case CategoriaSoftSkill.Comunicacao:
-                if (fase == FaseProfissional.DificilSenior) return "Vou comunicar o risco com clareza, dizer o que já sabemos, o que ainda estamos investigando e qual é o próximo status.";
-                if (fase == FaseProfissional.MedioPleno) return "Vou alinhar com dev, QA e produto o impacto real antes de prometer qualquer coisa.";
-                return "Antes de seguir, eu vou perguntar o que está faltando e deixar registrado pra evitar retrabalho.";
-
-            case CategoriaSoftSkill.TrabalhoEquipe:
-                if (fase == FaseProfissional.DificilSenior) return "Vou tirar o foco da culpa e organizar o time em frentes claras: estabilização, investigação e comunicação.";
-                if (fase == FaseProfissional.MedioPleno) return "Vou chamar os envolvidos, separar fato de opinião e destravar uma decisão que todos consigam seguir.";
-                return "Vou pedir ajuda mostrando o que eu já tentei, assim a pessoa não precisa começar do zero comigo.";
-
-            case CategoriaSoftSkill.ResolucaoProblemas:
-                if (fase == FaseProfissional.DificilSenior) return "Primeiro estabilizo o impacto no cliente. Depois conduzo a investigação da causa raiz sem apagar evidências.";
-                if (fase == FaseProfissional.MedioPleno) return "Vou resolver o bloqueio, mas sem criar uma gambiarra que vire dívida técnica maior depois.";
-                return "Vou reproduzir o erro, anotar o passo a passo e testar uma correção pequena antes de mexer em tudo.";
-
-            case CategoriaSoftSkill.Adaptabilidade:
-                if (fase == FaseProfissional.DificilSenior) return "Vou reorganizar o plano com base no risco atual e explicar o que muda, o que fica e por quê.";
-                if (fase == FaseProfissional.MedioPleno) return "Vou renegociar prioridade e prazo com o time, em vez de só aceitar a mudança no escuro.";
-                return "Vou confirmar o novo combinado e ajustar minha tarefa antes de continuar no caminho errado.";
-
-            case CategoriaSoftSkill.Empatia:
-                if (fase == FaseProfissional.DificilSenior) return "Vou proteger a equipe de exposição desnecessária, assumir a condução da crise e tratar o erro como aprendizado depois.";
-                if (fase == FaseProfissional.MedioPleno) return "Vou conversar com a pessoa em particular, entender a sobrecarga e ajudar a redistribuir sem expor ninguém.";
-                return "Vou ouvir primeiro, entender o que aconteceu e responder de um jeito que ajude em vez de aumentar a pressão.";
-        }
-
-        return "Vou agir com calma, clareza e responsabilidade.";
+        return ObterDialogoInfo(fase, indice).respostaBoa;
     }
 
     string CriarRespostaMedia(FaseProfissional fase, CategoriaSoftSkill categoria, int indice)
     {
-        switch (categoria)
-        {
-            case CategoriaSoftSkill.Comunicacao:
-                if (fase == FaseProfissional.DificilSenior) return "Vou passar só o essencial agora e completar os detalhes quando tivermos mais certeza.";
-                if (fase == FaseProfissional.MedioPleno) return "Vou seguir com a parte mais urgente e aviso o resto do time quando tiver algo mais concreto.";
-                return "Vou tentar seguir com o que entendi. Se eu travar ou aparecer erro, aí eu pergunto.";
-
-            case CategoriaSoftSkill.TrabalhoEquipe:
-                if (fase == FaseProfissional.DificilSenior) return "Vou deixar cada frente tocar sua parte e entro se o conflito começar a atrapalhar demais.";
-                if (fase == FaseProfissional.MedioPleno) return "Vou ajudar no que depende de mim, mas prefiro não entrar muito na discussão entre eles.";
-                return "Vou fazer minha parte primeiro. Se alguém pedir ajuda, eu tento apoiar.";
-
-            case CategoriaSoftSkill.ResolucaoProblemas:
-                if (fase == FaseProfissional.DificilSenior) return "Vou aplicar o contorno mais rápido agora e depois vemos se precisa de uma solução definitiva.";
-                if (fase == FaseProfissional.MedioPleno) return "Vou corrigir o ponto mais urgente primeiro e investigo a causa com mais calma depois.";
-                return "Vou testar uma solução simples primeiro. Se não funcionar, procuro outra saída.";
-
-            case CategoriaSoftSkill.Adaptabilidade:
-                if (fase == FaseProfissional.DificilSenior) return "Vou manter o plano atual até ter certeza de que a mudança de direção é definitiva.";
-                if (fase == FaseProfissional.MedioPleno) return "Vou ajustar o que for urgente, mesmo que algumas pontas fiquem pra depois.";
-                return "Vou mudar o que pediram, mas preciso de um tempo pra entender tudo.";
-
-            case CategoriaSoftSkill.Empatia:
-                if (fase == FaseProfissional.DificilSenior) return "Vou evitar expor as pessoas, mas agora o foco principal precisa ser dar uma resposta rápida.";
-                if (fase == FaseProfissional.MedioPleno) return "Vou dar espaço pra pessoa, mas sem assumir responsabilidades que não são minhas.";
-                return "Vou evitar piorar o clima e seguir com meu trabalho.";
-        }
-
-        return "Vou resolver o mais urgente agora e ajustar o restante depois.";
+        return ObterDialogoInfo(fase, indice).respostaMedia;
     }
 
     string CriarRespostaRuim(FaseProfissional fase, CategoriaSoftSkill categoria, int indice)
     {
-        switch (categoria)
-        {
-            case CategoriaSoftSkill.Comunicacao:
-                if (fase == FaseProfissional.DificilSenior) return "Não vou alarmar ninguém. É melhor resolver em silêncio e só comentar se alguém perguntar.";
-                if (fase == FaseProfissional.MedioPleno) return "Quem precisar saber que venha atrás. Eu não vou gastar tempo explicando tudo de novo.";
-                return "Se a descrição está ruim, o problema não é meu. Vou fazer do jeito que eu entendi.";
-
-            case CategoriaSoftSkill.TrabalhoEquipe:
-                if (fase == FaseProfissional.DificilSenior) return "Se o time está brigando, cada um que defenda sua parte. Eu só vou garantir que minha decisão prevaleça.";
-                if (fase == FaseProfissional.MedioPleno) return "Isso atrasou porque alguém não fez a própria parte. Primeiro precisamos apontar quem errou.";
-                return "Vou cuidar só da minha entrega. Se outra pessoa atrasar, não é comigo.";
-
-            case CategoriaSoftSkill.ResolucaoProblemas:
-                if (fase == FaseProfissional.DificilSenior) return "Vou aplicar a correção mais rápida direto em produção. Depois a gente vê se deu efeito colateral.";
-                if (fase == FaseProfissional.MedioPleno) return "Não precisa investigar tanto. Vou mudar o que parece errado e torcer pra funcionar.";
-                return "Vou chutar uma solução. Se quebrar, alguém mais experiente arruma depois.";
-
-            case CategoriaSoftSkill.Adaptabilidade:
-                if (fase == FaseProfissional.DificilSenior) return "Essa mudança chegou tarde demais. Vou manter o plano antigo e quem discordar que justifique.";
-                if (fase == FaseProfissional.MedioPleno) return "Toda hora mudam prioridade. Vou continuar no que eu já estava fazendo.";
-                return "Não vou mudar agora. Se queriam diferente, deveriam ter avisado antes.";
-
-            case CategoriaSoftSkill.Empatia:
-                if (fase == FaseProfissional.DificilSenior) return "Medo de errar todo mundo tem. Agora não é hora de acolher ninguém, é hora de cobrar resultado.";
-                if (fase == FaseProfissional.MedioPleno) return "Se a pessoa está sobrecarregada, deveria ter falado antes. Não vou assumir problema dos outros.";
-                return "Cada um lida com sua pressão. Eu tenho meus próprios problemas.";
-        }
-
-        return "Vou fazer do meu jeito e evitar me envolver.";
+        return ObterDialogoInfo(fase, indice).respostaRuim;
     }
 
     string CriarReacaoBoa(FaseProfissional fase, CategoriaSoftSkill categoria, DadosPersonagem npc, int indice)
     {
-        if (fase == FaseProfissional.DificilSenior)
-            return "Certo. Isso dá direção sem maquiar o problema. O time consegue agir e o cliente recebe uma resposta responsável.";
-
-        if (fase == FaseProfissional.MedioPleno)
-            return "Boa. Você não tratou isso como uma disputa, e sim como um problema de alinhamento que precisa virar plano.";
-
-        return "Boa. Isso mostra maturidade pra pedir clareza antes de transformar uma dúvida pequena em retrabalho.";
+        return ObterDialogoInfo(fase, indice).reacaoBoa;
     }
 
     string CriarReacaoMedia(FaseProfissional fase, CategoriaSoftSkill categoria, DadosPersonagem npc, int indice)
     {
-        if (fase == FaseProfissional.DificilSenior)
-            return "Pode segurar o impacto agora, mas deixa risco pra depois. Em crise, o curto prazo importa, mas confiança também.";
-
-        if (fase == FaseProfissional.MedioPleno)
-            return "Funciona parcialmente, mas ainda deixa gente desalinhada. O problema pode voltar com outro nome na próxima reunião.";
-
-        return "Dá pra seguir, mas você ainda fica muito dependente de perceber o problema tarde. Comunicação cedo evitaria isso.";
+        return ObterDialogoInfo(fase, indice).reacaoMedia;
     }
 
     string CriarReacaoRuim(FaseProfissional fase, CategoriaSoftSkill categoria, DadosPersonagem npc, int indice)
     {
-        if (fase == FaseProfissional.DificilSenior)
-            return "Isso piora a crise. Quando a pressão sobe, esconder informação ou procurar culpado costuma quebrar a confiança antes de corrigir o sistema.";
+        return ObterDialogoInfo(fase, indice).reacaoRuim;
+    }
 
-        if (fase == FaseProfissional.MedioPleno)
-            return "Essa postura aumenta atrito. Como pleno, você precisa reduzir ruído, não empurrar o problema pra outra pessoa.";
+    string ObterSoftSkillsDialogo(FaseProfissional fase, int indice)
+    {
+        return ObterDialogoInfo(fase, indice).softSkills;
+    }
 
-        return "Esse caminho pode parecer mais fácil agora, mas passa a impressão de falta de responsabilidade e cria retrabalho pro time.";
+    DialogoInfo[] DialogosJunior()
+    {
+        return new DialogoInfo[]
+        {
+            D("Esse card veio incompleto. Antes de começar a codar, vamos confirmar o que realmente foi pedido.", "Comunicação clara; análise de requisitos", "Antes, quero validar o combinado.", "Antes de seguir, eu quero validar o combinado com quem abriu a demanda, porque o risco é implementar algo diferente do esperado.", "Boa escolha. Você trabalhou Comunicação clara; análise de requisitos sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Vou seguir pelo que está mais claro.", "Vou começar pela parte que parece mais clara e deixar as dúvidas para confirmar quando alguém responder.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Comunicação clara; análise de requisitos ficou sem ser plenamente trabalhada.", "Dá para decidir pelo card.", "Acho que dá para decidir pelo que já está no card e seguir, mesmo sem confirmar tudo agora.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Comunicação clara; análise de requisitos e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O QA apontou duas divergências em relação ao Jira. Ainda dá para corrigir sem impacto, mas, se deixarmos passar, isso vira retrabalho.", "Atenção aos detalhes; alinhamento", "Vou comparar card e teste.", "Vou comparar o que está no Jira com o que o QA encontrou e alinhar a diferença antes que vire retrabalho.", "Boa escolha. Você trabalhou Atenção aos detalhes; alinhamento sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Ajusto os pontos marcados.", "Vou corrigir os pontos que o QA marcou primeiro e depois vejo se ainda ficou algo fora do combinado.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Atenção aos detalhes; alinhamento ficou sem ser plenamente trabalhada.", "Talvez não valha parar por isso.", "Talvez não valha parar a entrega por essas divergências se ainda dá para corrigir depois.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Atenção aos detalhes; alinhamento e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Você acabou de entrar, então não precisa fingir que já entendeu tudo. O importante é perguntar cedo e não travar a entrega.", "Segurança para pedir ajuda; autoconfiança", "Vou mostrar onde travei.", "Vou mostrar o que entendi, o que tentei e exatamente onde travei, para pedir ajuda sem deixar a pessoa no escuro.", "Boa escolha. Você trabalhou Segurança para pedir ajuda; autoconfiança sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Tento mais um pouco sozinho.", "Vou tentar avançar mais um pouco sozinho para não interromper ninguém agora.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Segurança para pedir ajuda; autoconfiança ficou sem ser plenamente trabalhada.", "Prefiro não envolver mais gente.", "Prefiro não envolver mais gente agora; posso tentar resolver sem abrir mais conversa.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Segurança para pedir ajuda; autoconfiança e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O PR voltou com comentários simples, mas alguns mudam o comportamento da tela. A resposta precisa ser técnica e respeitosa, não defensiva.", "Receptividade a feedback; comunicação respeitosa", "Respondo explicando o ajuste.", "Vou responder o comentário explicando o que vou ajustar e perguntando se há algum impacto que ainda não percebi.", "Boa escolha. Você trabalhou Receptividade a feedback; comunicação respeitosa sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Respondo de forma objetiva.", "Vou responder só o necessário no PR e fazer o ajuste principal sem prolongar a conversa.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Receptividade a feedback; comunicação respeitosa ficou sem ser plenamente trabalhada.", "Vou defender minha implementação.", "Vou explicar por que fiz desse jeito, porque talvez o comentário não tenha considerado meu raciocínio.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Receptividade a feedback; comunicação respeitosa e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O Produto pediu uma mudança pequena no meio da sprint. No papel parece simples, mas no código ela mexe em mais coisa do que parece.", "Adaptabilidade; visão de impacto", "Vejo o impacto antes de mexer.", "Vou entender quais partes podem ser afetadas antes de aceitar a mudança como se fosse simples.", "Boa escolha. Você trabalhou Adaptabilidade; visão de impacto sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Encaixo a mudança no fluxo.", "Vou tentar encaixar a mudança no fluxo atual sem mexer em mais partes do que o necessário.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Adaptabilidade; visão de impacto ficou sem ser plenamente trabalhada.", "Mantenho o plano original.", "Como a mudança chegou no meio da sprint, talvez seja melhor manter o plano original por enquanto.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Adaptabilidade; visão de impacto e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Tem alguém do time querendo ajudar, mas a agenda está cheia. Se for pedir apoio, chega com contexto, não só com 'não funciona'.", "Colaboração; pedir ajuda com contexto", "Antes, quero validar o combinado.", "Antes de seguir, eu quero validar o combinado com quem abriu a demanda, porque o risco é implementar algo diferente do esperado.", "Boa escolha. Você trabalhou Colaboração; pedir ajuda com contexto sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Vou seguir pelo que está mais claro.", "Vou começar pela parte que parece mais clara e deixar as dúvidas para confirmar quando alguém responder.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Colaboração; pedir ajuda com contexto ficou sem ser plenamente trabalhada.", "Dá para decidir pelo card.", "Acho que dá para decidir pelo que já está no card e seguir, mesmo sem confirmar tudo agora.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Colaboração; pedir ajuda com contexto e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Esse bug não derruba o sistema, mas bloqueia o QA. Se a gente tratar como detalhe, todo o fluxo para.", "Priorização; senso de urgência", "Vou comparar card e teste.", "Vou comparar o que está no Jira com o que o QA encontrou e alinhar a diferença antes que vire retrabalho.", "Boa escolha. Você trabalhou Priorização; senso de urgência sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Ajusto os pontos marcados.", "Vou corrigir os pontos que o QA marcou primeiro e depois vejo se ainda ficou algo fora do combinado.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Priorização; senso de urgência ficou sem ser plenamente trabalhada.", "Talvez não valha parar por isso.", "Talvez não valha parar a entrega por essas divergências se ainda dá para corrigir depois.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Priorização; senso de urgência e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O backend diz que a regra está certa, mas a tela mostra outra coisa. Antes de apontar erro, vamos juntar as peças.", "Escuta ativa; comunicação entre áreas", "Vou mostrar onde travei.", "Vou mostrar o que entendi, o que tentei e exatamente onde travei, para pedir ajuda sem deixar a pessoa no escuro.", "Boa escolha. Você trabalhou Escuta ativa; comunicação entre áreas sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Tento mais um pouco sozinho.", "Vou tentar avançar mais um pouco sozinho para não interromper ninguém agora.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Escuta ativa; comunicação entre áreas ficou sem ser plenamente trabalhada.", "Prefiro não envolver mais gente.", "Prefiro não envolver mais gente agora; posso tentar resolver sem abrir mais conversa.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Escuta ativa; comunicação entre áreas e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A daily começa já. Se você disser só 'estou fazendo', ninguém vai entender o risco real da entrega.", "Comunicação assertiva; transparência", "Respondo explicando o ajuste.", "Vou responder o comentário explicando o que vou ajustar e perguntando se há algum impacto que ainda não percebi.", "Boa escolha. Você trabalhou Comunicação assertiva; transparência sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Respondo de forma objetiva.", "Vou responder só o necessário no PR e fazer o ajuste principal sem prolongar a conversa.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Comunicação assertiva; transparência ficou sem ser plenamente trabalhada.", "Vou defender minha implementação.", "Vou explicar por que fiz desse jeito, porque talvez o comentário não tenha considerado meu raciocínio.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Comunicação assertiva; transparência e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Dá para resolver sem drama, mas precisamos falar com clareza. O problema é pequeno; o ruído ao redor pode crescer.", "Clareza; gestão de ruído", "Vejo o impacto antes de mexer.", "Vou entender quais partes podem ser afetadas antes de aceitar a mudança como se fosse simples.", "Boa escolha. Você trabalhou Clareza; gestão de ruído sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Encaixo a mudança no fluxo.", "Vou tentar encaixar a mudança no fluxo atual sem mexer em mais partes do que o necessário.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Clareza; gestão de ruído ficou sem ser plenamente trabalhada.", "Mantenho o plano original.", "Como a mudança chegou no meio da sprint, talvez seja melhor manter o plano original por enquanto.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Clareza; gestão de ruído e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O card foi escrito rápido demais e deixou interpretação para o time. Vamos ajustar isso antes que cada um siga por um caminho.", "Alinhamento de expectativa; organização", "Antes, quero validar o combinado.", "Antes de seguir, eu quero validar o combinado com quem abriu a demanda, porque o risco é implementar algo diferente do esperado.", "Boa escolha. Você trabalhou Alinhamento de expectativa; organização sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Vou seguir pelo que está mais claro.", "Vou começar pela parte que parece mais clara e deixar as dúvidas para confirmar quando alguém responder.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Alinhamento de expectativa; organização ficou sem ser plenamente trabalhada.", "Dá para decidir pelo card.", "Acho que dá para decidir pelo que já está no card e seguir, mesmo sem confirmar tudo agora.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Alinhamento de expectativa; organização e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Vi que você tentou resolver sozinho. A intenção é boa, mas ficar muito tempo em silêncio pode passar a impressão errada.", "Autonomia; comunicação", "Vou comparar card e teste.", "Vou comparar o que está no Jira com o que o QA encontrou e alinhar a diferença antes que vire retrabalho.", "Boa escolha. Você trabalhou Autonomia; comunicação sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Ajusto os pontos marcados.", "Vou corrigir os pontos que o QA marcou primeiro e depois vejo se ainda ficou algo fora do combinado.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Autonomia; comunicação ficou sem ser plenamente trabalhada.", "Talvez não valha parar por isso.", "Talvez não valha parar a entrega por essas divergências se ainda dá para corrigir depois.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Autonomia; comunicação e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O comentário no PR não foi bronca; faz parte do processo. A forma como você responde também comunica bastante.", "Receptividade a feedback; maturidade profissional", "Vou mostrar onde travei.", "Vou mostrar o que entendi, o que tentei e exatamente onde travei, para pedir ajuda sem deixar a pessoa no escuro.", "Boa escolha. Você trabalhou Receptividade a feedback; maturidade profissional sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Tento mais um pouco sozinho.", "Vou tentar avançar mais um pouco sozinho para não interromper ninguém agora.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Receptividade a feedback; maturidade profissional ficou sem ser plenamente trabalhada.", "Prefiro não envolver mais gente.", "Prefiro não envolver mais gente agora; posso tentar resolver sem abrir mais conversa.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Receptividade a feedback; maturidade profissional e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Uma mudança de prioridade está chegando. Não é para abandonar tudo, mas também não dá para agir como se nada tivesse mudado.", "Adaptabilidade; gestão de mudança", "Respondo explicando o ajuste.", "Vou responder o comentário explicando o que vou ajustar e perguntando se há algum impacto que ainda não percebi.", "Boa escolha. Você trabalhou Adaptabilidade; gestão de mudança sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Respondo de forma objetiva.", "Vou responder só o necessário no PR e fazer o ajuste principal sem prolongar a conversa.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Adaptabilidade; gestão de mudança ficou sem ser plenamente trabalhada.", "Vou defender minha implementação.", "Vou explicar por que fiz desse jeito, porque talvez o comentário não tenha considerado meu raciocínio.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Adaptabilidade; gestão de mudança e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O QA está pressionado para fechar os testes hoje. Se respondermos de forma dura, a conversa vira conflito.", "Empatia; resolução de conflitos", "Vejo o impacto antes de mexer.", "Vou entender quais partes podem ser afetadas antes de aceitar a mudança como se fosse simples.", "Boa escolha. Você trabalhou Empatia; resolução de conflitos sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Encaixo a mudança no fluxo.", "Vou tentar encaixar a mudança no fluxo atual sem mexer em mais partes do que o necessário.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Empatia; resolução de conflitos ficou sem ser plenamente trabalhada.", "Mantenho o plano original.", "Como a mudança chegou no meio da sprint, talvez seja melhor manter o plano original por enquanto.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Empatia; resolução de conflitos e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A tarefa parece simples, mas há uma regra de negócio escondida ali. Melhor confirmar agora do que descobrir depois da entrega.", "Validação; pensamento crítico", "Antes, quero validar o combinado.", "Antes de seguir, eu quero validar o combinado com quem abriu a demanda, porque o risco é implementar algo diferente do esperado.", "Boa escolha. Você trabalhou Validação; pensamento crítico sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Vou seguir pelo que está mais claro.", "Vou começar pela parte que parece mais clara e deixar as dúvidas para confirmar quando alguém responder.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Validação; pensamento crítico ficou sem ser plenamente trabalhada.", "Dá para decidir pelo card.", "Acho que dá para decidir pelo que já está no card e seguir, mesmo sem confirmar tudo agora.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Validação; pensamento crítico e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Ainda não está claro se isso é bug ou requisito mal explicado. Sua resposta pode organizar a conversa.", "Mediação; comunicação", "Vou comparar card e teste.", "Vou comparar o que está no Jira com o que o QA encontrou e alinhar a diferença antes que vire retrabalho.", "Boa escolha. Você trabalhou Mediação; comunicação sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Ajusto os pontos marcados.", "Vou corrigir os pontos que o QA marcou primeiro e depois vejo se ainda ficou algo fora do combinado.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Mediação; comunicação ficou sem ser plenamente trabalhada.", "Talvez não valha parar por isso.", "Talvez não valha parar a entrega por essas divergências se ainda dá para corrigir depois.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Mediação; comunicação e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Quem abriu o card não está online agora. Mesmo assim, precisamos registrar o que falta para ninguém se perder.", "Documentação; organização", "Vou mostrar onde travei.", "Vou mostrar o que entendi, o que tentei e exatamente onde travei, para pedir ajuda sem deixar a pessoa no escuro.", "Boa escolha. Você trabalhou Documentação; organização sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Tento mais um pouco sozinho.", "Vou tentar avançar mais um pouco sozinho para não interromper ninguém agora.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Documentação; organização ficou sem ser plenamente trabalhada.", "Prefiro não envolver mais gente.", "Prefiro não envolver mais gente agora; posso tentar resolver sem abrir mais conversa.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Documentação; organização e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Ninguém espera que você resolva tudo sozinho. Esperamos que você saiba apontar a dúvida e o que já tentou.", "Autonomia; comunicação objetiva", "Respondo explicando o ajuste.", "Vou responder o comentário explicando o que vou ajustar e perguntando se há algum impacto que ainda não percebi.", "Boa escolha. Você trabalhou Autonomia; comunicação objetiva sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Respondo de forma objetiva.", "Vou responder só o necessário no PR e fazer o ajuste principal sem prolongar a conversa.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Autonomia; comunicação objetiva ficou sem ser plenamente trabalhada.", "Vou defender minha implementação.", "Vou explicar por que fiz desse jeito, porque talvez o comentário não tenha considerado meu raciocínio.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Autonomia; comunicação objetiva e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A alteração parece pequena, mas sem teste pode quebrar outra parte. Vamos pensar antes de correr.", "Cautela; gestão de risco", "Vejo o impacto antes de mexer.", "Vou entender quais partes podem ser afetadas antes de aceitar a mudança como se fosse simples.", "Boa escolha. Você trabalhou Cautela; gestão de risco sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Encaixo a mudança no fluxo.", "Vou tentar encaixar a mudança no fluxo atual sem mexer em mais partes do que o necessário.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Cautela; gestão de risco ficou sem ser plenamente trabalhada.", "Mantenho o plano original.", "Como a mudança chegou no meio da sprint, talvez seja melhor manter o plano original por enquanto.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Cautela; gestão de risco e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Tem gente falando por mensagem, no Jira e no PR. Se ninguém organizar, isso vira bagunça.", "Organização; coordenação", "Antes, quero validar o combinado.", "Antes de seguir, eu quero validar o combinado com quem abriu a demanda, porque o risco é implementar algo diferente do esperado.", "Boa escolha. Você trabalhou Organização; coordenação sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Vou seguir pelo que está mais claro.", "Vou começar pela parte que parece mais clara e deixar as dúvidas para confirmar quando alguém responder.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Organização; coordenação ficou sem ser plenamente trabalhada.", "Dá para decidir pelo card.", "Acho que dá para decidir pelo que já está no card e seguir, mesmo sem confirmar tudo agora.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Organização; coordenação e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O prazo está apertado, mas ainda dá para salvar a entrega. Só não dá para trabalhar no escuro.", "Foco; gestão de prazo", "Vou comparar card e teste.", "Vou comparar o que está no Jira com o que o QA encontrou e alinhar a diferença antes que vire retrabalho.", "Boa escolha. Você trabalhou Foco; gestão de prazo sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Ajusto os pontos marcados.", "Vou corrigir os pontos que o QA marcou primeiro e depois vejo se ainda ficou algo fora do combinado.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Foco; gestão de prazo ficou sem ser plenamente trabalhada.", "Talvez não valha parar por isso.", "Talvez não valha parar a entrega por essas divergências se ainda dá para corrigir depois.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Foco; gestão de prazo e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Você vai perceber que desenvolvimento não é só código. Boa parte do trabalho é alinhar expectativa.", "Alinhamento de expectativa; visão sistêmica", "Vou mostrar onde travei.", "Vou mostrar o que entendi, o que tentei e exatamente onde travei, para pedir ajuda sem deixar a pessoa no escuro.", "Boa escolha. Você trabalhou Alinhamento de expectativa; visão sistêmica sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Tento mais um pouco sozinho.", "Vou tentar avançar mais um pouco sozinho para não interromper ninguém agora.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Alinhamento de expectativa; visão sistêmica ficou sem ser plenamente trabalhada.", "Prefiro não envolver mais gente.", "Prefiro não envolver mais gente agora; posso tentar resolver sem abrir mais conversa.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Alinhamento de expectativa; visão sistêmica e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Antes de fechar a task, precisamos garantir que todo mundo está falando da mesma coisa. Senão o erro volta.", "Consistência; checagem de entendimento", "Respondo explicando o ajuste.", "Vou responder o comentário explicando o que vou ajustar e perguntando se há algum impacto que ainda não percebi.", "Boa escolha. Você trabalhou Consistência; checagem de entendimento sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Respondo de forma objetiva.", "Vou responder só o necessário no PR e fazer o ajuste principal sem prolongar a conversa.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Consistência; checagem de entendimento ficou sem ser plenamente trabalhada.", "Vou defender minha implementação.", "Vou explicar por que fiz desse jeito, porque talvez o comentário não tenha considerado meu raciocínio.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Consistência; checagem de entendimento e aumenta risco de ruído, retrabalho ou perda de confiança.")
+        };
+    }
+
+    DialogoInfo[] DialogosPleno()
+    {
+        return new DialogoInfo[]
+        {
+            D("A sprint já começou atrasada e agora frontend, backend e QA estão defendendo versões diferentes do mesmo problema. Precisamos colocar ordem nisso.", "Mediação; negociação", "Quero fechar um entendimento comum.", "Vou juntar as áreas para fechar uma versão comum do problema, com impacto, responsável e próximo passo.", "Boa escolha. Você trabalhou Mediação; negociação sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "A gente resolve o mais urgente.", "Vou resolver o que está travando a sprint agora e deixar a discussão mais profunda para depois.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Mediação; negociação ficou sem ser plenamente trabalhada.", "Cada área precisa sustentar seu ponto.", "Cada área precisa sustentar o que está dizendo; não dá para o time inteiro parar para conciliar tudo.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Mediação; negociação e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Produto mudou o requisito de novo. Entendo a urgência, mas, sem discutir impacto, a sprint quebra de vez.", "Gestão de mudanças; análise de impacto", "Vamos medir o impacto antes.", "Vou levantar o impacto da mudança antes de aceitar o prazo como se nada tivesse mudado.", "Boa escolha. Você trabalhou Gestão de mudanças; análise de impacto sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Aceito, mas marco o risco.", "Vou aceitar a mudança, mas registrar que ela pode afetar prazo ou qualidade.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Gestão de mudanças; análise de impacto ficou sem ser plenamente trabalhada.", "Produto precisa assumir o custo.", "Se Produto mudou de novo, eles precisam assumir o custo da mudança e do atraso.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Gestão de mudanças; análise de impacto e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O QA diz que avisou desse risco ontem, e o dev diz que a regra não estava clara. Agora os dois lados estão irritados.", "Comunicação não defensiva; resolução de conflitos", "Vou separar fato de atrito.", "Vou separar o que é fato, o que é ruído e o que precisa virar critério de aceite.", "Boa escolha. Você trabalhou Comunicação não defensiva; resolução de conflitos sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Deixo cada lado explicar primeiro.", "Vou ouvir cada lado antes de decidir se realmente existe conflito ou só falta de informação.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Comunicação não defensiva; resolução de conflitos ficou sem ser plenamente trabalhada.", "Alguém precisa responder por isso.", "Se o risco foi avisado e ignorado, alguém precisa responder antes de seguirmos.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Comunicação não defensiva; resolução de conflitos e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Todo mundo sabe que essa refatoração é necessária, mas ela sempre perde espaço para a urgência. Hoje ela voltou a travar a entrega.", "Priorização; visão de longo prazo", "Precisamos escolher o menor risco.", "Vou propor uma decisão que resolva o bloqueio sem empurrar uma dívida técnica maior para depois.", "Boa escolha. Você trabalhou Priorização; visão de longo prazo sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Contorno agora, refatora depois.", "Vou contornar o bloqueio agora e deixar a refatoração documentada para uma próxima rodada.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Priorização; visão de longo prazo ficou sem ser plenamente trabalhada.", "A sprint precisa fechar agora.", "A sprint precisa fechar agora; se virar dívida técnica, a gente organiza depois.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Priorização; visão de longo prazo e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Você não está mais só recebendo tarefa. O time espera que você ajude a traduzir o problema entre as áreas.", "Tradução entre áreas; maturidade", "Quero olhar carga e entrega juntos.", "Vou olhar a sobrecarga junto com a entrega, porque qualidade também depende de como o time está trabalhando.", "Boa escolha. Você trabalhou Tradução entre áreas; maturidade sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Cobro sem expor demais.", "Vou cobrar a entrega com cuidado para não transformar a sobrecarga em desculpa ou exposição.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Tradução entre áreas; maturidade ficou sem ser plenamente trabalhada.", "Se aceitou a tarefa, entrega.", "Se a pessoa aceitou a tarefa, precisa entregar ou avisar formalmente que não consegue.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Tradução entre áreas; maturidade e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A discussão começou técnica e já virou pessoal. Se continuarmos assim, ninguém vai ouvir a solução.", "Controle emocional; desescalada", "Quero fechar um entendimento comum.", "Vou juntar as áreas para fechar uma versão comum do problema, com impacto, responsável e próximo passo.", "Boa escolha. Você trabalhou Controle emocional; desescalada sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "A gente resolve o mais urgente.", "Vou resolver o que está travando a sprint agora e deixar a discussão mais profunda para depois.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Controle emocional; desescalada ficou sem ser plenamente trabalhada.", "Cada área precisa sustentar seu ponto.", "Cada área precisa sustentar o que está dizendo; não dá para o time inteiro parar para conciliar tudo.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Controle emocional; desescalada e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A demanda do cliente importa, mas a dívida técnica também cobra juros. Precisamos decidir o que cabe sem criar um problema maior.", "Negociação; priorização técnica", "Vamos medir o impacto antes.", "Vou levantar o impacto da mudança antes de aceitar o prazo como se nada tivesse mudado.", "Boa escolha. Você trabalhou Negociação; priorização técnica sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Aceito, mas marco o risco.", "Vou aceitar a mudança, mas registrar que ela pode afetar prazo ou qualidade.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Negociação; priorização técnica ficou sem ser plenamente trabalhada.", "Produto precisa assumir o custo.", "Se Produto mudou de novo, eles precisam assumir o custo da mudança e do atraso.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Negociação; priorização técnica e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O time quer fechar a sprint, mas tem gente seguindo prioridade antiga porque ninguém atualizou o combinado.", "Alinhamento de combinados; responsabilidade coletiva", "Vou separar fato de atrito.", "Vou separar o que é fato, o que é ruído e o que precisa virar critério de aceite.", "Boa escolha. Você trabalhou Alinhamento de combinados; responsabilidade coletiva sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Deixo cada lado explicar primeiro.", "Vou ouvir cada lado antes de decidir se realmente existe conflito ou só falta de informação.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Alinhamento de combinados; responsabilidade coletiva ficou sem ser plenamente trabalhada.", "Alguém precisa responder por isso.", "Se o risco foi avisado e ignorado, alguém precisa responder antes de seguirmos.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Alinhamento de combinados; responsabilidade coletiva e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O PR virou debate. Tem comentário útil ali, mas também tem resposta atravessada. Precisamos baixar a temperatura.", "Feedback construtivo; equilíbrio", "Precisamos escolher o menor risco.", "Vou propor uma decisão que resolva o bloqueio sem empurrar uma dívida técnica maior para depois.", "Boa escolha. Você trabalhou Feedback construtivo; equilíbrio sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Contorno agora, refatora depois.", "Vou contornar o bloqueio agora e deixar a refatoração documentada para uma próxima rodada.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Feedback construtivo; equilíbrio ficou sem ser plenamente trabalhada.", "A sprint precisa fechar agora.", "A sprint precisa fechar agora; se virar dívida técnica, a gente organiza depois.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Feedback construtivo; equilíbrio e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Produto quer resposta rápida, QA quer segurança e desenvolvimento quer tempo. Nenhum lado está totalmente errado.", "Reconhecimento de perspectivas; equilíbrio", "Quero olhar carga e entrega juntos.", "Vou olhar a sobrecarga junto com a entrega, porque qualidade também depende de como o time está trabalhando.", "Boa escolha. Você trabalhou Reconhecimento de perspectivas; equilíbrio sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Cobro sem expor demais.", "Vou cobrar a entrega com cuidado para não transformar a sobrecarga em desculpa ou exposição.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Reconhecimento de perspectivas; equilíbrio ficou sem ser plenamente trabalhada.", "Se aceitou a tarefa, entrega.", "Se a pessoa aceitou a tarefa, precisa entregar ou avisar formalmente que não consegue.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Reconhecimento de perspectivas; equilíbrio e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Se você só executar a tarefa, talvez entregue. Se alinhar o impacto, talvez evite o mesmo problema na semana que vem.", "Pensamento estratégico; visão de impacto", "Quero fechar um entendimento comum.", "Vou juntar as áreas para fechar uma versão comum do problema, com impacto, responsável e próximo passo.", "Boa escolha. Você trabalhou Pensamento estratégico; visão de impacto sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "A gente resolve o mais urgente.", "Vou resolver o que está travando a sprint agora e deixar a discussão mais profunda para depois.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Pensamento estratégico; visão de impacto ficou sem ser plenamente trabalhada.", "Cada área precisa sustentar seu ponto.", "Cada área precisa sustentar o que está dizendo; não dá para o time inteiro parar para conciliar tudo.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Pensamento estratégico; visão de impacto e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A pessoa mais nova do time pegou uma parte difícil e está claramente perdida. Ela não pediu ajuda, mas o atraso já apareceu.", "Apoio ao colega; empatia", "Vamos medir o impacto antes.", "Vou levantar o impacto da mudança antes de aceitar o prazo como se nada tivesse mudado.", "Boa escolha. Você trabalhou Apoio ao colega; empatia sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Aceito, mas marco o risco.", "Vou aceitar a mudança, mas registrar que ela pode afetar prazo ou qualidade.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Apoio ao colega; empatia ficou sem ser plenamente trabalhada.", "Produto precisa assumir o custo.", "Se Produto mudou de novo, eles precisam assumir o custo da mudança e do atraso.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Apoio ao colega; empatia e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A reunião está virando disputa de culpa. Quero que alguém traga a conversa de volta para fatos e próximos passos.", "Mediação; foco em fatos", "Vou separar fato de atrito.", "Vou separar o que é fato, o que é ruído e o que precisa virar critério de aceite.", "Boa escolha. Você trabalhou Mediação; foco em fatos sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Deixo cada lado explicar primeiro.", "Vou ouvir cada lado antes de decidir se realmente existe conflito ou só falta de informação.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Mediação; foco em fatos ficou sem ser plenamente trabalhada.", "Alguém precisa responder por isso.", "Se o risco foi avisado e ignorado, alguém precisa responder antes de seguirmos.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Mediação; foco em fatos e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A mudança parece pequena para o Produto, mas toca num fluxo antigo. Se dissermos só 'não dá', eles não vão entender.", "Comunicação com stakeholder; clareza", "Precisamos escolher o menor risco.", "Vou propor uma decisão que resolva o bloqueio sem empurrar uma dívida técnica maior para depois.", "Boa escolha. Você trabalhou Comunicação com stakeholder; clareza sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Contorno agora, refatora depois.", "Vou contornar o bloqueio agora e deixar a refatoração documentada para uma próxima rodada.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Comunicação com stakeholder; clareza ficou sem ser plenamente trabalhada.", "A sprint precisa fechar agora.", "A sprint precisa fechar agora; se virar dívida técnica, a gente organiza depois.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Comunicação com stakeholder; clareza e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O QA achou um comportamento diferente do esperado, mas o requisito está ambíguo. Aqui não adianta ganhar discussão; precisamos fechar entendimento.", "Fechamento de entendimento; negociação", "Quero olhar carga e entrega juntos.", "Vou olhar a sobrecarga junto com a entrega, porque qualidade também depende de como o time está trabalhando.", "Boa escolha. Você trabalhou Fechamento de entendimento; negociação sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Cobro sem expor demais.", "Vou cobrar a entrega com cuidado para não transformar a sobrecarga em desculpa ou exposição.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Fechamento de entendimento; negociação ficou sem ser plenamente trabalhada.", "Se aceitou a tarefa, entrega.", "Se a pessoa aceitou a tarefa, precisa entregar ou avisar formalmente que não consegue.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Fechamento de entendimento; negociação e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Você conhece essa parte do sistema melhor do que quase todo mundo. Por isso, sua forma de falar pode acalmar ou incendiar o time.", "Influência; comunicação assertiva", "Quero fechar um entendimento comum.", "Vou juntar as áreas para fechar uma versão comum do problema, com impacto, responsável e próximo passo.", "Boa escolha. Você trabalhou Influência; comunicação assertiva sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "A gente resolve o mais urgente.", "Vou resolver o que está travando a sprint agora e deixar a discussão mais profunda para depois.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Influência; comunicação assertiva ficou sem ser plenamente trabalhada.", "Cada área precisa sustentar seu ponto.", "Cada área precisa sustentar o que está dizendo; não dá para o time inteiro parar para conciliar tudo.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Influência; comunicação assertiva e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A sprint não vai caber do jeito que está. Alguém vai precisar negociar escopo sem transformar isso em guerra.", "Negociação de escopo; colaboração", "Vamos medir o impacto antes.", "Vou levantar o impacto da mudança antes de aceitar o prazo como se nada tivesse mudado.", "Boa escolha. Você trabalhou Negociação de escopo; colaboração sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Aceito, mas marco o risco.", "Vou aceitar a mudança, mas registrar que ela pode afetar prazo ou qualidade.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Negociação de escopo; colaboração ficou sem ser plenamente trabalhada.", "Produto precisa assumir o custo.", "Se Produto mudou de novo, eles precisam assumir o custo da mudança e do atraso.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Negociação de escopo; colaboração e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O legado está limitando a entrega, mas mexer nele agora tem risco. A decisão precisa ser madura, não só rápida.", "Tomada de decisão; análise de risco", "Vou separar fato de atrito.", "Vou separar o que é fato, o que é ruído e o que precisa virar critério de aceite.", "Boa escolha. Você trabalhou Tomada de decisão; análise de risco sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Deixo cada lado explicar primeiro.", "Vou ouvir cada lado antes de decidir se realmente existe conflito ou só falta de informação.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Tomada de decisão; análise de risco ficou sem ser plenamente trabalhada.", "Alguém precisa responder por isso.", "Se o risco foi avisado e ignorado, alguém precisa responder antes de seguirmos.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Tomada de decisão; análise de risco e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Tem alguém sobrecarregado cobrindo duas frentes. Se fingirmos que está tudo normal, a qualidade vai cair.", "Empatia; gestão de carga", "Precisamos escolher o menor risco.", "Vou propor uma decisão que resolva o bloqueio sem empurrar uma dívida técnica maior para depois.", "Boa escolha. Você trabalhou Empatia; gestão de carga sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Contorno agora, refatora depois.", "Vou contornar o bloqueio agora e deixar a refatoração documentada para uma próxima rodada.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Empatia; gestão de carga ficou sem ser plenamente trabalhada.", "A sprint precisa fechar agora.", "A sprint precisa fechar agora; se virar dívida técnica, a gente organiza depois.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Empatia; gestão de carga e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A liderança quer saber o que está travando a entrega. Se a resposta sair mal construída, parece desculpa em vez de diagnóstico.", "Diagnóstico; comunicação clara", "Quero olhar carga e entrega juntos.", "Vou olhar a sobrecarga junto com a entrega, porque qualidade também depende de como o time está trabalhando.", "Boa escolha. Você trabalhou Diagnóstico; comunicação clara sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Cobro sem expor demais.", "Vou cobrar a entrega com cuidado para não transformar a sobrecarga em desculpa ou exposição.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Diagnóstico; comunicação clara ficou sem ser plenamente trabalhada.", "Se aceitou a tarefa, entrega.", "Se a pessoa aceitou a tarefa, precisa entregar ou avisar formalmente que não consegue.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Diagnóstico; comunicação clara e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A equipe precisa de uma decisão, mas uma decisão apressada pode custar caro. Vamos separar urgência de impulso.", "Discernimento; tomada de decisão", "Quero fechar um entendimento comum.", "Vou juntar as áreas para fechar uma versão comum do problema, com impacto, responsável e próximo passo.", "Boa escolha. Você trabalhou Discernimento; tomada de decisão sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "A gente resolve o mais urgente.", "Vou resolver o que está travando a sprint agora e deixar a discussão mais profunda para depois.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Discernimento; tomada de decisão ficou sem ser plenamente trabalhada.", "Cada área precisa sustentar seu ponto.", "Cada área precisa sustentar o que está dizendo; não dá para o time inteiro parar para conciliar tudo.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Discernimento; tomada de decisão e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O conflito entre dev e QA está escondendo o principal: ninguém fechou o critério de aceite.", "Critérios de aceite; resolução de conflitos", "Vamos medir o impacto antes.", "Vou levantar o impacto da mudança antes de aceitar o prazo como se nada tivesse mudado.", "Boa escolha. Você trabalhou Critérios de aceite; resolução de conflitos sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Aceito, mas marco o risco.", "Vou aceitar a mudança, mas registrar que ela pode afetar prazo ou qualidade.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Critérios de aceite; resolução de conflitos ficou sem ser plenamente trabalhada.", "Produto precisa assumir o custo.", "Se Produto mudou de novo, eles precisam assumir o custo da mudança e do atraso.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Critérios de aceite; resolução de conflitos e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Agora eu preciso que você pense como pleno: entrega, pessoas e consequência. Não dá para olhar só para a parte técnica.", "Visão plena; responsabilidade", "Vou separar fato de atrito.", "Vou separar o que é fato, o que é ruído e o que precisa virar critério de aceite.", "Boa escolha. Você trabalhou Visão plena; responsabilidade sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Deixo cada lado explicar primeiro.", "Vou ouvir cada lado antes de decidir se realmente existe conflito ou só falta de informação.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Visão plena; responsabilidade ficou sem ser plenamente trabalhada.", "Alguém precisa responder por isso.", "Se o risco foi avisado e ignorado, alguém precisa responder antes de seguirmos.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Visão plena; responsabilidade e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Ainda dá para recuperar a sprint, mas não se cada pessoa continuar protegendo só a própria parte.", "Colaboração; trabalho em equipe", "Precisamos escolher o menor risco.", "Vou propor uma decisão que resolva o bloqueio sem empurrar uma dívida técnica maior para depois.", "Boa escolha. Você trabalhou Colaboração; trabalho em equipe sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Contorno agora, refatora depois.", "Vou contornar o bloqueio agora e deixar a refatoração documentada para uma próxima rodada.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Colaboração; trabalho em equipe ficou sem ser plenamente trabalhada.", "A sprint precisa fechar agora.", "A sprint precisa fechar agora; se virar dívida técnica, a gente organiza depois.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Colaboração; trabalho em equipe e aumenta risco de ruído, retrabalho ou perda de confiança.")
+        };
+    }
+
+    DialogoInfo[] DialogosSenior()
+    {
+        return new DialogoInfo[]
+        {
+            D("O incidente em produção já afetou o cliente e a diretoria quer uma previsão. O time está olhando para você porque alguém precisa organizar a resposta.", "Liderança; comunicação em crise", "Vamos alinhar uma resposta segura.", "Vou organizar uma resposta segura com o que sabemos, o que não sabemos e quando será o próximo status.", "Boa escolha. Você trabalhou Liderança; comunicação em crise sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Comunico só o que está fechado.", "Vou comunicar apenas o que está confirmado e evitar detalhes que ainda podem mudar.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Liderança; comunicação em crise ficou sem ser plenamente trabalhada.", "Não abro o risco agora.", "Prefiro não abrir o risco agora para evitar pânico enquanto tentamos resolver internamente.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Liderança; comunicação em crise e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A correção rápida existe, mas pode mascarar a causa real. Se aplicarmos agora, talvez estabilize; se falhar, a confiança cai mais.", "Gestão de risco; análise de causa", "Estabilizar sem perder evidência.", "Vou reduzir o impacto no cliente sem apagar informações importantes para entender a causa real.", "Boa escolha. Você trabalhou Gestão de risco; análise de causa sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Uso o contorno para ganhar tempo.", "Vou aplicar um contorno para reduzir o impacto e ganhar tempo para investigar melhor.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Gestão de risco; análise de causa ficou sem ser plenamente trabalhada.", "Mexemos direto para voltar logo.", "Vou mexer direto para fazer o serviço voltar logo; a análise completa pode esperar.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Gestão de risco; análise de causa e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A war room está aberta há horas. Tem gente cansada, cliente cobrando e liderança pedindo uma explicação que ainda não temos completa.", "Resiliência; comunicação sob pressão", "Divido frentes e protejo o time.", "Vou dividir frentes de trabalho, reduzir ruído e proteger a equipe para que ela consiga resolver.", "Boa escolha. Você trabalhou Resiliência; comunicação sob pressão sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Deixo as frentes rodarem.", "Vou deixar as frentes rodarem e interferir só se a sala perder foco ou entrar em conflito.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Resiliência; comunicação sob pressão ficou sem ser plenamente trabalhada.", "Pressão faz parte da crise.", "A equipe precisa entender o peso do erro agora; acolhimento pode ficar para o pós-crise.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Resiliência; comunicação sob pressão e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Dois especialistas discordam sobre a arquitetura. Os dois têm bons argumentos, mas a decisão não pode virar disputa de ego.", "Debate respeitoso; escuta técnica", "Decido pelo risco, não pelo ego.", "Vou ouvir os argumentos técnicos e decidir pelo risco operacional, não pela autoridade de quem falou.", "Boa escolha. Você trabalhou Debate respeitoso; escuta técnica sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Escolho o caminho menos instável.", "Vou escolher o caminho que parece menos instável agora, mesmo sem resolver toda a discussão.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Debate respeitoso; escuta técnica ficou sem ser plenamente trabalhada.", "Não há tempo para debate.", "Não temos tempo para debate técnico longo; vou impor uma direção e seguir.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Debate respeitoso; escuta técnica e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O cliente quer saber quando volta, a equipe quer tempo para investigar e a diretoria quer uma mensagem segura. Nada disso pode ser tratado separado.", "Gestão de stakeholders; negociação", "Equilibro urgência e transparência.", "Vou equilibrar cliente, diretoria e equipe com uma mensagem honesta, sem prometer o que não temos.", "Boa escolha. Você trabalhou Gestão de stakeholders; negociação sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Seguro parte da mensagem.", "Vou segurar parte da mensagem até termos mais segurança técnica sobre o que aconteceu.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Gestão de stakeholders; negociação ficou sem ser plenamente trabalhada.", "Dou uma previsão firme.", "Vou dar uma previsão firme para acalmar o cliente, mesmo que ainda falte diagnóstico.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Gestão de stakeholders; negociação e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Alguém deixou passar um alerta importante, mas caçar culpado agora só vai fazer as pessoas esconderem informação. Precisamos resolver e aprender.", "Cultura sem culpa; aprendizado contínuo", "Vamos alinhar uma resposta segura.", "Vou organizar uma resposta segura com o que sabemos, o que não sabemos e quando será o próximo status.", "Boa escolha. Você trabalhou Cultura sem culpa; aprendizado contínuo sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Comunico só o que está fechado.", "Vou comunicar apenas o que está confirmado e evitar detalhes que ainda podem mudar.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Cultura sem culpa; aprendizado contínuo ficou sem ser plenamente trabalhada.", "Não abro o risco agora.", "Prefiro não abrir o risco agora para evitar pânico enquanto tentamos resolver internamente.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Cultura sem culpa; aprendizado contínuo e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A estabilidade está no limite. Se mexermos demais, piora; se mexermos de menos, o cliente continua parado.", "Gestão de risco; estabilidade", "Estabilizar sem perder evidência.", "Vou reduzir o impacto no cliente sem apagar informações importantes para entender a causa real.", "Boa escolha. Você trabalhou Gestão de risco; estabilidade sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Uso o contorno para ganhar tempo.", "Vou aplicar um contorno para reduzir o impacto e ganhar tempo para investigar melhor.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Gestão de risco; estabilidade ficou sem ser plenamente trabalhada.", "Mexemos direto para voltar logo.", "Vou mexer direto para fazer o serviço voltar logo; a análise completa pode esperar.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Gestão de risco; estabilidade e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Tem um dev segurando a bronca desde a madrugada. Ele está exausto e já começou a errar em coisas simples. Isso também é risco técnico.", "Empatia; segurança psicológica", "Divido frentes e protejo o time.", "Vou dividir frentes de trabalho, reduzir ruído e proteger a equipe para que ela consiga resolver.", "Boa escolha. Você trabalhou Empatia; segurança psicológica sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Deixo as frentes rodarem.", "Vou deixar as frentes rodarem e interferir só se a sala perder foco ou entrar em conflito.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Empatia; segurança psicológica ficou sem ser plenamente trabalhada.", "Pressão faz parte da crise.", "A equipe precisa entender o peso do erro agora; acolhimento pode ficar para o pós-crise.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Empatia; segurança psicológica e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A decisão de arquitetura, que parecia distante, virou problema de produção hoje. Agora precisamos escolher um caminho sem romantizar a solução perfeita.", "Pensamento crítico; decisão de arquitetura", "Decido pelo risco, não pelo ego.", "Vou ouvir os argumentos técnicos e decidir pelo risco operacional, não pela autoridade de quem falou.", "Boa escolha. Você trabalhou Pensamento crítico; decisão de arquitetura sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Escolho o caminho menos instável.", "Vou escolher o caminho que parece menos instável agora, mesmo sem resolver toda a discussão.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Pensamento crítico; decisão de arquitetura ficou sem ser plenamente trabalhada.", "Não há tempo para debate.", "Não temos tempo para debate técnico longo; vou impor uma direção e seguir.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Pensamento crítico; decisão de arquitetura e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A comunicação externa precisa ser honesta, mas não pode jogar a equipe na fogueira. O cliente precisa de clareza, não de pânico.", "Comunicação honesta; responsabilidade", "Equilibro urgência e transparência.", "Vou equilibrar cliente, diretoria e equipe com uma mensagem honesta, sem prometer o que não temos.", "Boa escolha. Você trabalhou Comunicação honesta; responsabilidade sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Seguro parte da mensagem.", "Vou segurar parte da mensagem até termos mais segurança técnica sobre o que aconteceu.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Comunicação honesta; responsabilidade ficou sem ser plenamente trabalhada.", "Dou uma previsão firme.", "Vou dar uma previsão firme para acalmar o cliente, mesmo que ainda falte diagnóstico.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Comunicação honesta; responsabilidade e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O time está esperando uma direção. Se você hesitar demais, cada um vai agir por conta própria.", "Liderança; direcionamento", "Vamos alinhar uma resposta segura.", "Vou organizar uma resposta segura com o que sabemos, o que não sabemos e quando será o próximo status.", "Boa escolha. Você trabalhou Liderança; direcionamento sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Comunico só o que está fechado.", "Vou comunicar apenas o que está confirmado e evitar detalhes que ainda podem mudar.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Liderança; direcionamento ficou sem ser plenamente trabalhada.", "Não abro o risco agora.", "Prefiro não abrir o risco agora para evitar pânico enquanto tentamos resolver internamente.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Liderança; direcionamento e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O rollback resolve parte do impacto, mas joga fora trabalho importante. Manter a versão atual exige confiança numa correção que ainda não foi validada.", "Análise de trade-offs; tomada de decisão", "Estabilizar sem perder evidência.", "Vou reduzir o impacto no cliente sem apagar informações importantes para entender a causa real.", "Boa escolha. Você trabalhou Análise de trade-offs; tomada de decisão sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Uso o contorno para ganhar tempo.", "Vou aplicar um contorno para reduzir o impacto e ganhar tempo para investigar melhor.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Análise de trade-offs; tomada de decisão ficou sem ser plenamente trabalhada.", "Mexemos direto para voltar logo.", "Vou mexer direto para fazer o serviço voltar logo; a análise completa pode esperar.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Análise de trade-offs; tomada de decisão e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A liderança quer um responsável pelo incidente. Eu prefiro sair daqui com causa, plano e prevenção, mas a pressão por culpado está crescendo.", "Responsabilidade; foco em causa raiz", "Divido frentes e protejo o time.", "Vou dividir frentes de trabalho, reduzir ruído e proteger a equipe para que ela consiga resolver.", "Boa escolha. Você trabalhou Responsabilidade; foco em causa raiz sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Deixo as frentes rodarem.", "Vou deixar as frentes rodarem e interferir só se a sala perder foco ou entrar em conflito.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Responsabilidade; foco em causa raiz ficou sem ser plenamente trabalhada.", "Pressão faz parte da crise.", "A equipe precisa entender o peso do erro agora; acolhimento pode ficar para o pós-crise.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Responsabilidade; foco em causa raiz e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Tem gente experiente se atacando porque todo mundo está sob pressão. Se isso continuar, a crise técnica vira crise de equipe.", "Gestão de conflito; maturidade emocional", "Decido pelo risco, não pelo ego.", "Vou ouvir os argumentos técnicos e decidir pelo risco operacional, não pela autoridade de quem falou.", "Boa escolha. Você trabalhou Gestão de conflito; maturidade emocional sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Escolho o caminho menos instável.", "Vou escolher o caminho que parece menos instável agora, mesmo sem resolver toda a discussão.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Gestão de conflito; maturidade emocional ficou sem ser plenamente trabalhada.", "Não há tempo para debate.", "Não temos tempo para debate técnico longo; vou impor uma direção e seguir.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Gestão de conflito; maturidade emocional e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O cliente percebeu inconsistência nos dados. Mesmo que o erro seja pequeno, a confiança já foi afetada.", "Transparência; construção de confiança", "Equilibro urgência e transparência.", "Vou equilibrar cliente, diretoria e equipe com uma mensagem honesta, sem prometer o que não temos.", "Boa escolha. Você trabalhou Transparência; construção de confiança sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Seguro parte da mensagem.", "Vou segurar parte da mensagem até termos mais segurança técnica sobre o que aconteceu.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Transparência; construção de confiança ficou sem ser plenamente trabalhada.", "Dou uma previsão firme.", "Vou dar uma previsão firme para acalmar o cliente, mesmo que ainda falte diagnóstico.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Transparência; construção de confiança e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A equipe precisa saber o que comunicar no próximo status report. Silêncio parece omissão; detalhe demais pode virar alarme.", "Comunicação de crise; prudência", "Vamos alinhar uma resposta segura.", "Vou organizar uma resposta segura com o que sabemos, o que não sabemos e quando será o próximo status.", "Boa escolha. Você trabalhou Comunicação de crise; prudência sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Comunico só o que está fechado.", "Vou comunicar apenas o que está confirmado e evitar detalhes que ainda podem mudar.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Comunicação de crise; prudência ficou sem ser plenamente trabalhada.", "Não abro o risco agora.", "Prefiro não abrir o risco agora para evitar pânico enquanto tentamos resolver internamente.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Comunicação de crise; prudência e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A solução definitiva exige tempo que talvez não tenhamos. O contorno rápido exige risco que talvez não possamos assumir.", "Priorização; gestão de incerteza", "Estabilizar sem perder evidência.", "Vou reduzir o impacto no cliente sem apagar informações importantes para entender a causa real.", "Boa escolha. Você trabalhou Priorização; gestão de incerteza sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Uso o contorno para ganhar tempo.", "Vou aplicar um contorno para reduzir o impacto e ganhar tempo para investigar melhor.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Priorização; gestão de incerteza ficou sem ser plenamente trabalhada.", "Mexemos direto para voltar logo.", "Vou mexer direto para fazer o serviço voltar logo; a análise completa pode esperar.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Priorização; gestão de incerteza e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Alguém reconheceu um erro no privado, mas está com medo de falar na reunião. A verdade importa, mas a forma como a gente recebe isso também.", "Segurança psicológica; confiança", "Divido frentes e protejo o time.", "Vou dividir frentes de trabalho, reduzir ruído e proteger a equipe para que ela consiga resolver.", "Boa escolha. Você trabalhou Segurança psicológica; confiança sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Deixo as frentes rodarem.", "Vou deixar as frentes rodarem e interferir só se a sala perder foco ou entrar em conflito.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Segurança psicológica; confiança ficou sem ser plenamente trabalhada.", "Pressão faz parte da crise.", "A equipe precisa entender o peso do erro agora; acolhimento pode ficar para o pós-crise.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Segurança psicológica; confiança e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A diretoria quer garantia, mas garantia absoluta agora seria mentira.", "Honestidade; ética", "Decido pelo risco, não pelo ego.", "Vou ouvir os argumentos técnicos e decidir pelo risco operacional, não pela autoridade de quem falou.", "Boa escolha. Você trabalhou Honestidade; ética sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Escolho o caminho menos instável.", "Vou escolher o caminho que parece menos instável agora, mesmo sem resolver toda a discussão.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Honestidade; ética ficou sem ser plenamente trabalhada.", "Não há tempo para debate.", "Não temos tempo para debate técnico longo; vou impor uma direção e seguir.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Honestidade; ética e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O cliente quer uma data, a engenharia quer mais diagnóstico e o Produto quer manter o compromisso comercial. Você precisa equilibrar essas forças.", "Equilíbrio de interesses; negociação", "Equilibro urgência e transparência.", "Vou equilibrar cliente, diretoria e equipe com uma mensagem honesta, sem prometer o que não temos.", "Boa escolha. Você trabalhou Equilíbrio de interesses; negociação sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Seguro parte da mensagem.", "Vou segurar parte da mensagem até termos mais segurança técnica sobre o que aconteceu.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Equilíbrio de interesses; negociação ficou sem ser plenamente trabalhada.", "Dou uma previsão firme.", "Vou dar uma previsão firme para acalmar o cliente, mesmo que ainda falte diagnóstico.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Equilíbrio de interesses; negociação e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("O sistema voltou parcialmente, mas ainda está instável. Se comemorarmos cedo demais, podemos perder credibilidade.", "Prudência; gestão de credibilidade", "Vamos alinhar uma resposta segura.", "Vou organizar uma resposta segura com o que sabemos, o que não sabemos e quando será o próximo status.", "Boa escolha. Você trabalhou Prudência; gestão de credibilidade sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Comunico só o que está fechado.", "Vou comunicar apenas o que está confirmado e evitar detalhes que ainda podem mudar.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Prudência; gestão de credibilidade ficou sem ser plenamente trabalhada.", "Não abro o risco agora.", "Prefiro não abrir o risco agora para evitar pânico enquanto tentamos resolver internamente.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Prudência; gestão de credibilidade e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A decisão técnica de agora vai virar precedente. O time aprende com o que você tolera em crise.", "Liderança pelo exemplo; cultura", "Estabilizar sem perder evidência.", "Vou reduzir o impacto no cliente sem apagar informações importantes para entender a causa real.", "Boa escolha. Você trabalhou Liderança pelo exemplo; cultura sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Uso o contorno para ganhar tempo.", "Vou aplicar um contorno para reduzir o impacto e ganhar tempo para investigar melhor.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Liderança pelo exemplo; cultura ficou sem ser plenamente trabalhada.", "Mexemos direto para voltar logo.", "Vou mexer direto para fazer o serviço voltar logo; a análise completa pode esperar.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Liderança pelo exemplo; cultura e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("Tem uma reunião com stakeholders em poucos minutos. Precisamos transformar o caos técnico em uma mensagem responsável.", "Comunicação com stakeholders; síntese", "Divido frentes e protejo o time.", "Vou dividir frentes de trabalho, reduzir ruído e proteger a equipe para que ela consiga resolver.", "Boa escolha. Você trabalhou Comunicação com stakeholders; síntese sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Deixo as frentes rodarem.", "Vou deixar as frentes rodarem e interferir só se a sala perder foco ou entrar em conflito.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Comunicação com stakeholders; síntese ficou sem ser plenamente trabalhada.", "Pressão faz parte da crise.", "A equipe precisa entender o peso do erro agora; acolhimento pode ficar para o pós-crise.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Comunicação com stakeholders; síntese e aumenta risco de ruído, retrabalho ou perda de confiança."),
+            D("A crise está quase controlada, mas o pós-incidente vai definir se isso vira aprendizado ou só mais uma cicatriz na equipe.", "Aprendizado contínuo; retrospectiva", "Decido pelo risco, não pelo ego.", "Vou ouvir os argumentos técnicos e decidir pelo risco operacional, não pela autoridade de quem falou.", "Boa escolha. Você trabalhou Aprendizado contínuo; retrospectiva sem tratar a situação como simples demais. A resposta ajuda a criar clareza e reduz risco para a equipe.", "Escolho o caminho menos instável.", "Vou escolher o caminho que parece menos instável agora, mesmo sem resolver toda a discussão.", "Resposta parcialmente adequada. Existe um caminho útil na sua decisão, mas parte de Aprendizado contínuo; retrospectiva ficou sem ser plenamente trabalhada.", "Não há tempo para debate.", "Não temos tempo para debate técnico longo; vou impor uma direção e seguir.", "Resposta inadequada. A decisão até pode parecer prática no curto prazo, mas enfraquece Aprendizado contínuo; retrospectiva e aumenta risco de ruído, retrabalho ou perda de confiança.")
+        };
     }
 
     OpcaoEscolha CriarOpcaoBoa(CategoriaSoftSkill categoria, string textoBotao, string falaJogador, string reacaoNPC, int proximoNo)
@@ -1576,6 +1539,13 @@ public class GerenciadorJogoTCC : MonoBehaviour
 
         NoDialogoVN noAtual = nos[indiceNoAtual];
 
+        if (exibindoConclusaoFase)
+        {
+            if (painelEscolhas != null) painelEscolhas.SetActive(false);
+            if (botaoContinuar != null) botaoContinuar.gameObject.SetActive(true);
+            return;
+        }
+
         if (exibindoReacaoEscolha)
         {
             if (painelEscolhas != null) painelEscolhas.SetActive(false);
@@ -1650,9 +1620,24 @@ public class GerenciadorJogoTCC : MonoBehaviour
             return;
         }
 
+        if (exibindoConclusaoFase)
+        {
+            exibindoConclusaoFase = false;
+            MostrarResultadoFase();
+            return;
+        }
+
         if (exibindoReacaoEscolha)
         {
             exibindoReacaoEscolha = false;
+
+            if (faseConcluidaPorAcertos)
+            {
+                faseConcluidaPorAcertos = false;
+                exibindoConclusaoFase = true;
+                MostrarConclusaoFasePorAcertos();
+                return;
+            }
 
             if (aguardandoResultadoFase)
             {
@@ -1671,6 +1656,149 @@ public class GerenciadorJogoTCC : MonoBehaviour
 
         indiceNoAtual = nos[indiceNoAtual].proximoNoSimples;
         MostrarNoAtual();
+    }
+
+    void AbrirPainelFeedback(OpcaoEscolha opcao)
+    {
+        opcaoAguardandoFeedback = opcao;
+        feedbackAguardandoContinuar = true;
+
+        if (painelEscolhas != null) painelEscolhas.SetActive(false);
+        if (botaoContinuar != null) botaoContinuar.gameObject.SetActive(false);
+        if (painelFeedback != null) painelFeedback.SetActive(true);
+
+        if (textoFeedback != null)
+            textoFeedback.text = GerarTextoFeedback(opcao);
+    }
+
+    void ContinuarDepoisFeedback()
+    {
+        if (!feedbackAguardandoContinuar || opcaoAguardandoFeedback == null)
+            return;
+
+        OpcaoEscolha opcao = opcaoAguardandoFeedback;
+        opcaoAguardandoFeedback = null;
+        feedbackAguardandoContinuar = false;
+
+        if (painelFeedback != null) painelFeedback.SetActive(false);
+
+        if (DeveAtivarGameOver())
+        {
+            MostrarGameOverDemissao();
+            return;
+        }
+
+        exibindoReacaoEscolha = true;
+
+        bool venceuFaseAgora = totalEscolhasBoas >= AcertosNecessarios(faseAtual);
+
+        if (venceuFaseAgora)
+        {
+            faseConcluidaPorAcertos = true;
+            aguardandoResultadoFase = false;
+            proximoNoAposReacao = -1;
+        }
+        else if (opcao.proximoNo == -1 || opcao.proximoNo >= nos.Count)
+        {
+            aguardandoResultadoFase = true;
+            proximoNoAposReacao = -1;
+        }
+        else
+        {
+            aguardandoResultadoFase = false;
+            proximoNoAposReacao = opcao.proximoNo;
+        }
+
+        MostrarNoAtual();
+    }
+
+    string GerarTextoFeedback(OpcaoEscolha opcao)
+    {
+        string titulo;
+
+        if (opcao.tomResposta == TomResposta.Boa)
+            titulo = "Resposta adequada";
+        else if (opcao.tomResposta == TomResposta.Neutra)
+            titulo = "Resposta parcialmente adequada";
+        else
+            titulo = "Resposta inadequada";
+
+        return titulo + "\n\n" +
+            opcao.reacaoNPC + "\n\n" +
+            ExplicarDesempenhoDaResposta(opcao) + "\n\n" +
+            "Competência trabalhada: " + NomeCategoria(opcao.categoria) + ".";
+    }
+
+    string ExplicarDesempenhoDaResposta(OpcaoEscolha opcao)
+    {
+        if (opcao.tomResposta == TomResposta.Boa)
+        {
+            switch (opcao.categoria)
+            {
+                case CategoriaSoftSkill.Comunicacao:
+                    return "Você acertou porque priorizou clareza, alinhamento e registro das informações antes que o problema virasse retrabalho.";
+                case CategoriaSoftSkill.TrabalhoEquipe:
+                    return "Você acertou porque tratou a situação como um problema coletivo, sem empurrar culpa para outra pessoa.";
+                case CategoriaSoftSkill.ResolucaoProblemas:
+                    return "Você acertou porque investigou a causa e reduziu risco antes de tentar uma solução apressada.";
+                case CategoriaSoftSkill.Adaptabilidade:
+                    return "Você acertou porque aceitou reorganizar o plano sem ignorar impacto, prazo e qualidade.";
+                case CategoriaSoftSkill.Empatia:
+                    return "Você acertou porque considerou o estado da equipe e respondeu sem aumentar a pressão do ambiente.";
+            }
+        }
+
+        if (opcao.tomResposta == TomResposta.Neutra)
+        {
+            switch (opcao.categoria)
+            {
+                case CategoriaSoftSkill.Comunicacao:
+                    return "Sua resposta resolveu parte do momento, mas ainda deixou informações importantes sem alinhamento claro.";
+                case CategoriaSoftSkill.TrabalhoEquipe:
+                    return "Sua resposta evitou conflito direto, mas não ajudou muito a equipe a destravar o problema em conjunto.";
+                case CategoriaSoftSkill.ResolucaoProblemas:
+                    return "Sua resposta buscou resolver rápido, mas poderia investigar melhor para evitar que o erro volte depois.";
+                case CategoriaSoftSkill.Adaptabilidade:
+                    return "Sua resposta aceitou a mudança, mas sem reorganizar completamente as prioridades e consequências.";
+                case CategoriaSoftSkill.Empatia:
+                    return "Sua resposta manteve certa neutralidade, mas poderia acolher melhor as pessoas envolvidas.";
+            }
+        }
+
+        switch (opcao.categoria)
+        {
+            case CategoriaSoftSkill.Comunicacao:
+                return "Você errou porque sua resposta gerou ruído, escondeu contexto ou deixou a equipe sem informação suficiente.";
+            case CategoriaSoftSkill.TrabalhoEquipe:
+                return "Você errou porque sua resposta aumentou a distância entre as pessoas e enfraqueceu a colaboração.";
+            case CategoriaSoftSkill.ResolucaoProblemas:
+                return "Você errou porque escolheu agir por impulso, sem análise suficiente do problema e dos riscos.";
+            case CategoriaSoftSkill.Adaptabilidade:
+                return "Você errou porque resistiu à mudança e dificultou a reorganização necessária para seguir o trabalho.";
+            case CategoriaSoftSkill.Empatia:
+                return "Você errou porque ignorou o impacto emocional e profissional nas pessoas envolvidas.";
+        }
+
+        return "Sua escolha afetou diretamente a confiança dos NPCs na sua postura profissional.";
+    }
+
+    string NomeCategoria(CategoriaSoftSkill categoria)
+    {
+        switch (categoria)
+        {
+            case CategoriaSoftSkill.Comunicacao:
+                return "Comunicação";
+            case CategoriaSoftSkill.TrabalhoEquipe:
+                return "Trabalho em equipe";
+            case CategoriaSoftSkill.ResolucaoProblemas:
+                return "Resolução de problemas";
+            case CategoriaSoftSkill.Adaptabilidade:
+                return "Adaptabilidade";
+            case CategoriaSoftSkill.Empatia:
+                return "Empatia";
+            default:
+                return "Soft skill";
+        }
     }
 
     void EscolherOpcao(OpcaoEscolha opcao)
@@ -1711,26 +1839,7 @@ public class GerenciadorJogoTCC : MonoBehaviour
         ultimaRespostaJogador = opcao.respostaJogador;
         ultimaReacaoNPC = opcao.reacaoNPC;
 
-        if (DeveAtivarGameOver())
-        {
-            MostrarGameOverDemissao();
-            return;
-        }
-
-        exibindoReacaoEscolha = true;
-
-        if (opcao.proximoNo == -1 || opcao.proximoNo >= nos.Count)
-        {
-            aguardandoResultadoFase = true;
-            proximoNoAposReacao = -1;
-        }
-        else
-        {
-            aguardandoResultadoFase = false;
-            proximoNoAposReacao = opcao.proximoNo;
-        }
-
-        MostrarNoAtual();
+        AbrirPainelFeedback(opcao);
     }
 
     void RegistrarRespostaRuim(CategoriaSoftSkill categoria)
@@ -1785,7 +1894,10 @@ public class GerenciadorJogoTCC : MonoBehaviour
         if (painelEscolhas != null) painelEscolhas.SetActive(false);
         if (painelResultadoFase != null) painelResultadoFase.SetActive(false);
         if (painelFinal != null) painelFinal.SetActive(false);
+        if (painelSelecaoFase != null) painelSelecaoFase.SetActive(false);
+        if (painelFeedback != null) painelFeedback.SetActive(false);
         if (textoClimaEquipe != null) textoClimaEquipe.gameObject.SetActive(false);
+        if (botaoVoltarSelecaoFase != null) botaoVoltarSelecaoFase.gameObject.SetActive(false);
         if (painelGameOver != null) painelGameOver.SetActive(true);
 
         if (controladorCena != null)
@@ -1905,6 +2017,8 @@ public class GerenciadorJogoTCC : MonoBehaviour
         ruinsAdaptabilidade = 0;
         ruinsEmpatia = 0;
         ultimaCategoriaRuim = CategoriaSoftSkill.Comunicacao;
+        feedbackAguardandoContinuar = false;
+        opcaoAguardandoFeedback = null;
     }
 
     void VoltarParaCriacaoPersonagem()
@@ -1935,41 +2049,115 @@ public class GerenciadorJogoTCC : MonoBehaviour
         IniciarFase(faseAtual);
     }
 
+    void MostrarConclusaoFasePorAcertos()
+    {
+        if (indiceNoAtual < 0 || indiceNoAtual >= nos.Count)
+        {
+            MostrarResultadoFase();
+            return;
+        }
+
+        NoDialogoVN noAtual = nos[indiceNoAtual];
+        DadosPersonagem npcConclusao = EscolherNpcConclusaoFase(noAtual);
+        string falaConclusao = CriarFalaConclusaoFase();
+
+        textoCompletoNPC = falaConclusao;
+        textoCompletoJogador = "";
+
+        if (caixaNomeNPC != null) caixaNomeNPC.SetActive(true);
+        if (textoFalaNPC != null) textoFalaNPC.gameObject.SetActive(true);
+
+        if (caixaNomeJogador != null) caixaNomeJogador.SetActive(false);
+        if (textoFalaJogador != null) textoFalaJogador.gameObject.SetActive(false);
+
+        if (textoNomeNPC != null)
+            textoNomeNPC.text = npcConclusao != null ? npcConclusao.nomePersonagem : "NPC";
+
+        if (painelEscolhas != null) painelEscolhas.SetActive(false);
+        if (botaoContinuar != null) botaoContinuar.gameObject.SetActive(true);
+
+        if (controladorCena != null)
+        {
+            Emocao emocaoEsquerdaFinal = noAtual.personagemEsquerda == npcConclusao ? Emocao.Feliz : Emocao.Neutro;
+            Emocao emocaoCentroFinal = noAtual.personagemCentro == npcConclusao ? Emocao.Feliz : Emocao.Neutro;
+            Emocao emocaoDireitaFinal = noAtual.personagemDireita == npcConclusao ? Emocao.Feliz : Emocao.Neutro;
+
+            controladorCena.AtualizarPersonagem(controladorCena.imagemEsquerda, noAtual.personagemEsquerda, emocaoEsquerdaFinal, noAtual.mostrarEsquerda);
+            controladorCena.AtualizarPersonagem(controladorCena.imagemCentro, noAtual.personagemCentro, emocaoCentroFinal, noAtual.mostrarCentro);
+            controladorCena.AtualizarPersonagem(controladorCena.imagemDireita, noAtual.personagemDireita, emocaoDireitaFinal, noAtual.mostrarDireita);
+            controladorCena.AtualizarJogador(aparenciaAtualJogador, Emocao.Feliz);
+
+            controladorCena.DestacarFalante(
+                npcConclusao,
+                noAtual.personagemEsquerda,
+                noAtual.personagemCentro,
+                noAtual.personagemDireita
+            );
+        }
+
+        IniciarDigitacao("", falaConclusao, false, true);
+    }
+
+    DadosPersonagem EscolherNpcConclusaoFase(NoDialogoVN noAtual)
+    {
+        if (noAtual == null)
+            return null;
+
+        if (noAtual.personagemFalando != noAtual.personagemCentro && noAtual.personagemCentro != null)
+            return noAtual.personagemCentro;
+
+        if (noAtual.personagemFalando != noAtual.personagemDireita && noAtual.personagemDireita != null)
+            return noAtual.personagemDireita;
+
+        if (noAtual.personagemFalando != noAtual.personagemEsquerda && noAtual.personagemEsquerda != null)
+            return noAtual.personagemEsquerda;
+
+        return noAtual.personagemFalando;
+    }
+
+    string CriarFalaConclusaoFase()
+    {
+        int necessario = AcertosNecessarios(faseAtual);
+
+        switch (faseAtual)
+        {
+            case FaseProfissional.FacilJunior:
+                return "Boa. Com essas decisões, conseguimos alinhar o card, destravar o QA e fechar o problema sem virar retrabalho. Você atingiu " + totalEscolhasBoas + " de " + necessario + " boas decisões nesta fase.";
+
+            case FaseProfissional.MedioPleno:
+                return "Certo, agora a situação está sob controle. O time conseguiu sair da discussão e transformar o conflito em próximos passos. Você atingiu " + totalEscolhasBoas + " de " + necessario + " boas decisões nesta fase.";
+
+            case FaseProfissional.DificilSenior:
+                return "Conseguimos estabilizar a crise e organizar uma resposta responsável para equipe, liderança e cliente. Você atingiu " + totalEscolhasBoas + " de " + necessario + " boas decisões nesta fase.";
+
+            default:
+                return "Conseguimos resolver os principais pontos desta fase. Você atingiu " + totalEscolhasBoas + " de " + necessario + " boas decisões.";
+        }
+    }
+
     void MostrarResultadoFase()
     {
         if (painelDialogo != null) painelDialogo.SetActive(false);
         if (painelEscolhas != null) painelEscolhas.SetActive(false);
+        if (painelFeedback != null) painelFeedback.SetActive(false);
         if (painelResultadoFase != null) painelResultadoFase.SetActive(true);
 
-        porcentagemFase = ((float)pontosFaseAtual / pontosMaximosFase) * 100f;
+        int necessario = AcertosNecessarios(faseAtual);
+        bool aprovado = totalEscolhasBoas >= necessario;
+        string textoAprovacao = aprovado
+            ? "Você venceu esta fase. A quantidade mínima de boas decisões foi atingida."
+            : "Você ainda não venceu esta fase. Refaça a fase para tentar melhorar suas decisões.";
 
-        bool aprovado = porcentagemFase >= PorcentagemNecessaria(faseAtual);
-        string textoAprovacao;
-
-        if (faseAtual == FaseProfissional.FacilJunior)
-        {
-            proximaFaseDepoisResultado = aprovado ? FaseProfissional.MedioPleno : FaseProfissional.FacilJunior;
-            textoAprovacao = aprovado ? "Aprovado para a 2ª Fase - Média (Pleno)." : "Você precisa repetir a 1ª Fase - Fácil.";
-            finalizarDepoisResultado = false;
-        }
-        else if (faseAtual == FaseProfissional.MedioPleno)
-        {
-            proximaFaseDepoisResultado = aprovado ? FaseProfissional.DificilSenior : FaseProfissional.MedioPleno;
-            textoAprovacao = aprovado ? "Aprovado para a 3ª Fase - Difícil (Sênior)." : "Você precisa repetir a 2ª Fase - Média.";
-            finalizarDepoisResultado = false;
-        }
-        else
-        {
-            textoAprovacao = aprovado ? "Você concluiu a fase Sênior com bom desempenho." : "Você concluiu a fase Sênior, mas precisa melhorar suas soft skills.";
-            finalizarDepoisResultado = true;
-        }
+        finalizarDepoisResultado = false;
 
         if (textoResultadoFase != null)
         {
             textoResultadoFase.text =
                 "Resultado da " + NomeFase(faseAtual) + "\n\n" +
-                "Aprovação necessária: " + PorcentagemNecessaria(faseAtual).ToString("F0") + "%\n" +
-                "Sua aprovação: " + porcentagemFase.ToString("F0") + "%\n\n" +
+                "Acertos necessários para vencer: " + necessario + "\n" +
+                "Suas respostas adequadas: " + totalEscolhasBoas + "\n" +
+                "Respostas parciais: " + totalEscolhasMedias + "\n" +
+                "Respostas inadequadas: " + totalEscolhasRuins + "\n\n" +
                 textoAprovacao + "\n\n" +
                 "Comunicação: " + comunicacao + "\n" +
                 "Trabalho em Equipe: " + trabalhoEquipe + "\n" +
@@ -2000,13 +2188,7 @@ public class GerenciadorJogoTCC : MonoBehaviour
         if (painelResultadoFase != null)
             painelResultadoFase.SetActive(false);
 
-        if (finalizarDepoisResultado)
-        {
-            MostrarFinal();
-            return;
-        }
-
-        IniciarFase(proximaFaseDepoisResultado);
+        MostrarSelecaoFase();
     }
 
     void MostrarFinal()
